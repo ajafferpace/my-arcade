@@ -1,0 +1,973 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Star Catcher</title>
+    <style>
+      :root {
+        --bg1: #071321;
+        --bg2: #102b37;
+        --panel: rgba(7, 19, 33, 0.88);
+        --text: #eef7f5;
+        --accent: #ffd166;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+        background:
+          radial-gradient(ellipse at 18% 12%, rgba(27, 112, 112, 0.32), transparent 38%),
+          radial-gradient(ellipse at 86% 82%, rgba(102, 66, 119, 0.24), transparent 36%),
+          linear-gradient(145deg, var(--bg2), var(--bg1) 62%, #080d1a);
+        color: var(--text);
+      }
+
+      .game-shell {
+        width: min(94vw, 760px);
+        background: var(--panel);
+        border: 1px solid rgba(211, 239, 232, 0.22);
+        border-radius: 10px;
+        box-shadow: 0 22px 70px rgba(0,0,0,0.42);
+        padding: 16px;
+      }
+
+      .hud {
+        display: grid;
+        grid-template-columns: 1fr 1fr auto auto auto;
+        align-items: center;
+        gap: 14px;
+        margin-bottom: 12px;
+        font-size: 0.95rem;
+        font-weight: 700;
+      }
+
+      .status {
+        color: var(--accent);
+        text-align: right;
+      }
+
+      .power-status {
+        color: #9ce8db;
+        text-align: right;
+      }
+
+      button {
+        border: 1px solid rgba(255, 209, 102, 0.55);
+        border-radius: 6px;
+        background: rgba(255, 209, 102, 0.12);
+        color: var(--text);
+        font: inherit;
+        padding: 7px 10px;
+        cursor: pointer;
+      }
+
+      button:hover, button:focus-visible {
+        background: rgba(255, 209, 102, 0.24);
+        outline: 2px solid transparent;
+      }
+
+      canvas {
+        width: 100%;
+        height: auto;
+        display: block;
+        background: #091627;
+        border: 1px solid rgba(211, 239, 232, 0.2);
+        border-radius: 6px;
+      }
+
+      @media (max-width: 560px) {
+        .hud {
+          grid-template-columns: 1fr 1fr auto;
+          gap: 8px;
+          font-size: 0.82rem;
+        }
+
+        .status, .power-status { grid-column: 1 / 3; text-align: left; }
+        .game-shell { padding: 10px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="game-shell">
+      <div class="hud">
+        <div>Stars caught: <span id="caught">0</span>/10</div>
+        <div>Misses: <span id="misses">0</span>/3</div>
+        <div class="status" id="status">Playing</div>
+        <button id="musicButton" type="button" aria-pressed="false">Music: Off</button>
+        <div class="power-status" id="powerStatus" aria-live="polite">Power-ups: none</div>
+      </div>
+      <canvas id="gameCanvas" width="620" height="420"></canvas>
+    </div>
+
+    <script>
+      const canvas = document.getElementById('gameCanvas');
+      const ctx = canvas.getContext('2d');
+      const caughtEl = document.getElementById('caught');
+      const missesEl = document.getElementById('misses');
+      const statusEl = document.getElementById('status');
+      const musicButton = document.getElementById('musicButton');
+  const powerStatusEl = document.getElementById('powerStatus');
+
+      const basket = {
+        width: 120,
+        height: 18,
+        x: canvas.width / 2 - 60,
+        y: canvas.height - 30,
+        speed: 9,
+        moveLeft: false,
+        moveRight: false,
+      };
+
+      let stars = [];
+      let soccerBalls = [];
+      let powerUps = [];
+      let caught = 0;
+      let misses = 0;
+      let lastSpawn = 0;
+      let lastBallSpawn = 0;
+      let lastPowerUpSpawn = 0;
+      let wideBasketUntil = 0;
+      let shields = 0;
+      let animationId = null;
+      let gameOver = false;
+      let gameStarted = false;
+      let lastFrame = 0;
+      let door = null;
+      let doorStar = null;
+      let doorStarSpawned = false;
+      let plane = {
+        x: -180,
+        y: 80,
+        speed: 3.7,
+        active: false,
+        visible: false,
+      };
+      let audioContext = null;
+
+      window.__game = {
+        get door() { return door; },
+        get stars() { return stars; },
+        get doorStar() { return doorStar; },
+        get doorStarSpawned() { return doorStarSpawned; }
+      };
+      let musicTimer = null;
+      let musicEnabled = false;
+      let musicStep = 0;
+
+      function getAudioContext() {
+        if (!audioContext) {
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          if (AudioContextClass) audioContext = new AudioContextClass();
+        }
+        if (audioContext?.state === 'suspended') audioContext.resume();
+        return audioContext;
+      }
+
+      function playTone(frequency, duration, waveform, volume) {
+        const audio = getAudioContext();
+        if (!audio) return;
+
+        const oscillator = audio.createOscillator();
+        const gain = audio.createGain();
+        const now = audio.currentTime;
+        oscillator.type = waveform;
+        oscillator.frequency.setValueAtTime(frequency, now);
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.exponentialRampToValueAtTime(volume, now + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+        oscillator.connect(gain);
+        gain.connect(audio.destination);
+        oscillator.start(now);
+        oscillator.stop(now + duration + 0.02);
+      }
+
+      function startMusic() {
+        if (musicTimer || !musicEnabled) return;
+        const melody = [523, 659, 784, 659, 587, 698, 880, 698, 523, 659, 784, 988, 880, 784, 659, 587];
+        musicTimer = window.setInterval(() => {
+          if (!musicEnabled) return;
+          const note = melody[musicStep % melody.length];
+          playTone(note, 0.2, 'sine', 0.035);
+          if (musicStep % 4 === 0) playTone(note / 2, 0.34, 'triangle', 0.025);
+          musicStep += 1;
+        }, 230);
+      }
+
+      function setMusicEnabled(enabled) {
+        musicEnabled = enabled;
+        musicButton.textContent = `Music: ${enabled ? 'On' : 'Off'}`;
+        musicButton.setAttribute('aria-pressed', String(enabled));
+        if (enabled) {
+          getAudioContext();
+          startMusic();
+        } else if (musicTimer) {
+          window.clearInterval(musicTimer);
+          musicTimer = null;
+        }
+      }
+
+      function playCatchSound() {
+        playTone(880, 0.12, 'sine', 0.11);
+        window.setTimeout(() => playTone(1175, 0.16, 'sine', 0.08), 65);
+      }
+
+      function playMissSound() {
+        playTone(220, 0.24, 'triangle', 0.1);
+      }
+
+      function resetGame() {
+        stars = [];
+        soccerBalls = [];
+        powerUps = [];
+        caught = 0;
+        misses = 0;
+        shields = 0;
+        wideBasketUntil = 0;
+        basket.width = 120;
+        basket.x = canvas.width / 2 - basket.width / 2;
+        basket.moveLeft = false;
+        basket.moveRight = false;
+        lastSpawn = 0;
+        lastBallSpawn = 0;
+        lastPowerUpSpawn = 0;
+        lastFrame = 0;
+        door = {
+          x: canvas.width * 0.5 - 54,
+          y: 100,
+          width: 108,
+          height: 86,
+        };
+        doorStar = null;
+        doorStarSpawned = false;
+        plane = {
+          x: -180,
+          y: 80,
+          speed: 3.7,
+          active: false,
+          visible: false,
+        };
+        gameOver = false;
+        statusEl.textContent = 'Playing';
+        updateHud();
+        updatePowerStatus(0);
+        if (animationId) cancelAnimationFrame(animationId);
+        animationId = requestAnimationFrame(gameLoop);
+      }
+
+      function updateHud() {
+        caughtEl.textContent = String(caught);
+        missesEl.textContent = String(misses);
+      }
+
+      function spawnStar() {
+        const radius = 10 + Math.random() * 6;
+        const horizontalSpeed = (Math.random() * 1.65 + 0.45) * (Math.random() < 0.5 ? -1 : 1);
+        const star = {
+          x: radius + Math.random() * (canvas.width - radius * 2),
+          y: radius + Math.random() * 90,
+          radius,
+          vx: horizontalSpeed,
+          vy: 0.5 + Math.random() * 1.2,
+          rotation: Math.random() * Math.PI,
+          spin: (Math.random() - 0.5) * 0.045,
+          isDoorStar: false,
+          passedDoor: false,
+        };
+
+        if (!doorStarSpawned) {
+          const centerX = door.x + door.width / 2;
+          star.x = centerX;
+          star.y = 18;
+          star.vx = 0;
+          star.vy = 1.25;
+          star.isDoorStar = true;
+          doorStar = star;
+          doorStarSpawned = true;
+        }
+
+        stars.push(star);
+      }
+
+      function spawnSoccerBall() {
+        const radius = 9 + Math.random() * 5;
+        soccerBalls.push({
+          x: radius + Math.random() * (canvas.width - radius * 2),
+          y: radius + Math.random() * (canvas.height - radius * 2),
+          radius,
+          vx: (Math.random() < 0.5 ? -1 : 1) * (1.2 + Math.random() * 1.8),
+          vy: (Math.random() < 0.5 ? -1 : 1) * (1.2 + Math.random() * 1.8),
+          rotation: Math.random() * Math.PI * 2,
+        });
+      }
+
+      function spawnPowerUp() {
+        const radius = 13;
+        powerUps.push({
+          x: radius + Math.random() * (canvas.width - radius * 2),
+          y: -radius,
+          radius,
+          vx: (Math.random() < 0.5 ? -1 : 1) * (0.7 + Math.random() * 1.1),
+          vy: 1.6 + Math.random() * 0.8,
+          type: Math.random() < 0.5 ? 'wide' : 'shield',
+        });
+      }
+
+      function updatePowerStatus(timestamp) {
+        const active = [];
+        if (wideBasketUntil > timestamp) {
+          active.push(`Wide ${Math.ceil((wideBasketUntil - timestamp) / 1000)}s`);
+        }
+        if (shields > 0) active.push(`Shield x${shields}`);
+        powerStatusEl.textContent = active.length ? active.join('  |  ') : 'Power-ups: none';
+      }
+
+      function updatePowerUps(delta, timestamp) {
+        const frameScale = Math.min(delta / 16.67, 2.5);
+        for (let i = powerUps.length - 1; i >= 0; i--) {
+          const powerUp = powerUps[i];
+          powerUp.x += powerUp.vx * frameScale;
+          powerUp.y += powerUp.vy * frameScale;
+
+          if (powerUp.x - powerUp.radius < 0 || powerUp.x + powerUp.radius > canvas.width) {
+            powerUp.vx *= -1;
+            powerUp.x = Math.max(powerUp.radius, Math.min(canvas.width - powerUp.radius, powerUp.x));
+          }
+
+          const overlapsBasket =
+            powerUp.y + powerUp.radius >= basket.y &&
+            powerUp.y - powerUp.radius <= basket.y + basket.height &&
+            powerUp.x + powerUp.radius >= basket.x &&
+            powerUp.x - powerUp.radius <= basket.x + basket.width;
+
+          if (overlapsBasket) {
+            powerUps.splice(i, 1);
+            if (powerUp.type === 'wide') {
+              const center = basket.x + basket.width / 2;
+              basket.width = 185;
+              basket.x = Math.max(0, Math.min(canvas.width - basket.width, center - basket.width / 2));
+              wideBasketUntil = timestamp + 8000;
+            } else {
+              shields = Math.min(shields + 1, 3);
+            }
+            playTone(powerUp.type === 'wide' ? 740 : 980, 0.2, 'triangle', 0.09);
+          } else if (powerUp.y - powerUp.radius > canvas.height) {
+            powerUps.splice(i, 1);
+          }
+        }
+
+        if (wideBasketUntil && timestamp >= wideBasketUntil) {
+          const center = basket.x + basket.width / 2;
+          basket.width = 120;
+          basket.x = Math.max(0, Math.min(canvas.width - basket.width, center - basket.width / 2));
+          wideBasketUntil = 0;
+        }
+        updatePowerStatus(timestamp);
+      }
+
+      function updateSoccerBalls(delta) {
+        const frameScale = Math.min(delta / 16.67, 2.5);
+        for (const ball of soccerBalls) {
+          ball.x += ball.vx * frameScale;
+          ball.y += ball.vy * frameScale;
+          ball.rotation += 0.025 * frameScale;
+
+          if (ball.x - ball.radius < 0 || ball.x + ball.radius > canvas.width) {
+            ball.vx *= -1;
+            ball.x = Math.max(ball.radius, Math.min(canvas.width - ball.radius, ball.x));
+          }
+          if (ball.y - ball.radius < 0 || ball.y + ball.radius > canvas.height) {
+            ball.vy *= -1;
+            ball.y = Math.max(ball.radius, Math.min(canvas.height - ball.radius, ball.y));
+          }
+        }
+      }
+
+      function handleInput() {
+        if (basket.moveLeft) basket.x -= basket.speed;
+        if (basket.moveRight) basket.x += basket.speed;
+        basket.x = Math.max(0, Math.min(canvas.width - basket.width, basket.x));
+      }
+
+      function updateStars(delta) {
+        const frameScale = Math.min(delta / 16.67, 2.5);
+        for (let i = stars.length - 1; i >= 0; i--) {
+          const star = stars[i];
+          star.x += star.vx * frameScale;
+          star.y += star.vy * frameScale;
+          star.vy += 0.006 * frameScale;
+          star.rotation += star.spin * frameScale;
+
+          if (star.isDoorStar && !star.passedDoor) {
+            const doorLeft = door.x;
+            const doorRight = door.x + door.width;
+            const doorTop = door.y;
+            const doorBottom = door.y + door.height;
+            const isInsideDoor =
+              star.y + star.radius >= doorTop &&
+              star.y - star.radius <= doorBottom &&
+              star.x + star.radius >= doorLeft &&
+              star.x - star.radius <= doorRight;
+
+            if (isInsideDoor) {
+              star.passedDoor = true;
+              star.x = door.x + door.width / 2;
+              star.vx = 0.18;
+              star.vy = 1.7;
+              playTone(760, 0.15, 'triangle', 0.08);
+            }
+          }
+
+          if (star.x - star.radius < 0) {
+            star.x = star.radius;
+            star.vx = Math.abs(star.vx);
+          } else if (star.x + star.radius > canvas.width) {
+            star.x = canvas.width - star.radius;
+            star.vx = -Math.abs(star.vx);
+          }
+          if (star.y - star.radius < 0) {
+            star.y = star.radius;
+            star.vy = Math.abs(star.vy);
+          }
+
+          const basketTop = basket.y;
+          const basketBottom = basket.y + basket.height;
+          const basketLeft = basket.x;
+          const basketRight = basket.x + basket.width;
+
+          const starHitsBasket =
+            star.y + star.radius >= basketTop &&
+            star.y - star.radius <= basketBottom &&
+            star.x + star.radius >= basketLeft &&
+            star.x - star.radius <= basketRight;
+
+          if (starHitsBasket) {
+            const bonusValue = star.isDoorStar ? 2 : 1;
+            if (star.isDoorStar) {
+              doorStar = null;
+              doorStarSpawned = false;
+            }
+            stars.splice(i, 1);
+            caught += bonusValue;
+            playCatchSound();
+            if (star.isDoorStar) {
+              playTone(1040, 0.18, 'triangle', 0.12);
+            }
+            updateHud();
+
+            if (caught >= 10) {
+              gameOver = true;
+              statusEl.textContent = 'You win!';
+              plane.visible = true;
+              plane.active = true;
+              plane.x = -180;
+              plane.y = 90 + Math.random() * 70;
+              return;
+            }
+            continue;
+          }
+
+          if (star.y - star.radius > canvas.height) {
+            if (star.isDoorStar) {
+              doorStar = null;
+              doorStarSpawned = false;
+            }
+            stars.splice(i, 1);
+            if (shields > 0) {
+              shields -= 1;
+              playTone(330, 0.18, 'sine', 0.1);
+            } else {
+              misses += 1;
+              playMissSound();
+              updateHud();
+            }
+
+            if (misses >= 3) {
+              gameOver = true;
+              statusEl.textContent = 'You lose!';
+              return;
+            }
+          }
+        }
+      }
+
+      function drawBasket() {
+        const centerX = basket.x + basket.width / 2;
+        const rimY = basket.y + 4;
+        const netBottomY = Math.min(rimY + 27, canvas.height - 3);
+
+        ctx.fillStyle = 'rgba(235, 245, 255, 0.12)';
+        ctx.fillRect(centerX - 37, basket.y - 45, 74, 38);
+        ctx.strokeStyle = '#e5edf5';
+        ctx.lineWidth = 4;
+        ctx.strokeRect(centerX - 37, basket.y - 45, 74, 38);
+        ctx.lineWidth = 2;
+        ctx.strokeRect(centerX - 17, basket.y - 34, 34, 22);
+
+        ctx.strokeStyle = '#f97316';
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.ellipse(centerX, rimY, basket.width / 2 - 5, 8, 0, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.strokeStyle = 'rgba(240, 248, 255, 0.85)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(basket.x + 15, rimY + 2);
+        ctx.lineTo(centerX - 22, netBottomY);
+        ctx.moveTo(basket.x + basket.width - 15, rimY + 2);
+        ctx.lineTo(centerX + 22, netBottomY);
+        ctx.moveTo(centerX - 34, rimY + 3);
+        ctx.lineTo(centerX - 13, netBottomY);
+        ctx.moveTo(centerX + 34, rimY + 3);
+        ctx.lineTo(centerX + 13, netBottomY);
+        ctx.moveTo(centerX - 22, netBottomY);
+        ctx.lineTo(centerX + 22, netBottomY);
+        ctx.moveTo(centerX - 28, rimY + 5);
+        ctx.lineTo(centerX + 28, rimY + 5);
+        ctx.stroke();
+      }
+
+      function drawAirplane() {
+        if (!plane.visible) return;
+
+        ctx.save();
+        ctx.translate(plane.x, plane.y);
+
+        ctx.fillStyle = '#e6f2ff';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 42, 18, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#a9c9ff';
+        ctx.beginPath();
+        ctx.moveTo(-22, -2);
+        ctx.lineTo(-44, -18);
+        ctx.lineTo(-34, -2);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.moveTo(-22, 2);
+        ctx.lineTo(-44, 18);
+        ctx.lineTo(-34, 2);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = '#d9ebff';
+        ctx.beginPath();
+        ctx.moveTo(20, 0);
+        ctx.lineTo(52, -8);
+        ctx.lineTo(38, 0);
+        ctx.lineTo(52, 8);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = '#80a6ff';
+        ctx.fillRect(-8, -6, 18, 12);
+
+        ctx.fillStyle = '#1f2d3d';
+        ctx.beginPath();
+        ctx.arc(10, -1, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+      }
+
+      function drawDoor() {
+        if (!door) return;
+        ctx.save();
+
+        ctx.fillStyle = 'rgba(19, 28, 46, 0.9)';
+        ctx.fillRect(door.x - 8, door.y - 12, door.width + 16, door.height + 18);
+
+        const glow = ctx.createRadialGradient(
+          door.x + door.width / 2,
+          door.y + door.height / 2,
+          10,
+          door.x + door.width / 2,
+          door.y + door.height / 2,
+          88
+        );
+        glow.addColorStop(0, 'rgba(255, 219, 128, 0.7)');
+        glow.addColorStop(0.35, 'rgba(129, 196, 255, 0.42)');
+        glow.addColorStop(1, 'rgba(129, 196, 255, 0)');
+        ctx.fillStyle = glow;
+        ctx.fillRect(door.x - 20, door.y - 20, door.width + 40, door.height + 40);
+
+        ctx.fillStyle = 'rgba(240, 206, 122, 0.14)';
+        ctx.fillRect(door.x, door.y, door.width, door.height);
+
+        ctx.lineWidth = 5;
+        ctx.strokeStyle = '#ffd977';
+        ctx.strokeRect(door.x, door.y, door.width, door.height);
+
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = '#f6efe2';
+        ctx.beginPath();
+        ctx.moveTo(door.x + 10, door.y + door.height);
+        ctx.lineTo(door.x + 10, door.y + 18);
+        ctx.lineTo(door.x + door.width - 10, door.y + 18);
+        ctx.lineTo(door.x + door.width - 10, door.y + door.height);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(door.x + 18, door.y + 16);
+        ctx.lineTo(door.x + door.width - 18, door.y + 16);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(door.x + door.width / 2, door.y + 16, 20, Math.PI, 0, false);
+        ctx.stroke();
+
+        ctx.fillStyle = 'rgba(255, 245, 200, 0.85)';
+        ctx.fillRect(door.x + door.width / 2 - 2, door.y + 4, 4, 12);
+        ctx.restore();
+      }
+
+      function drawStar(star) {
+        const { x, y, radius, rotation } = star;
+        ctx.beginPath();
+        for (let point = 0; point < 10; point++) {
+          const angle = rotation - Math.PI / 2 + point * Math.PI / 5;
+          const pointRadius = point % 2 === 0 ? radius : radius * 0.46;
+          const px = x + Math.cos(angle) * pointRadius;
+          const py = y + Math.sin(angle) * pointRadius;
+          if (point === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+
+        if (star.isDoorStar) {
+          ctx.shadowColor = 'rgba(180, 160, 255, 0.9)';
+          ctx.shadowBlur = 18;
+          ctx.fillStyle = '#c4b5fd';
+        } else {
+          ctx.shadowColor = 'rgba(255, 209, 102, 0.8)';
+          ctx.shadowBlur = 12;
+          ctx.fillStyle = '#ffd166';
+        }
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        if (star.isDoorStar && star.passedDoor) {
+          ctx.beginPath();
+          ctx.arc(x, y, radius + 5, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(196, 181, 253, 0.8)';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+      }
+
+      function drawSoccerBall(ball) {
+        ctx.save();
+        ctx.translate(ball.x, ball.y);
+        ctx.rotate(ball.rotation);
+        ctx.beginPath();
+        ctx.arc(0, 0, ball.radius, 0, Math.PI * 2);
+        ctx.fillStyle = '#fffaf0';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(39, 35, 42, 0.7)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        ctx.fillStyle = '#28313b';
+        ctx.beginPath();
+        for (let point = 0; point < 5; point++) {
+          const angle = -Math.PI / 2 + point * (Math.PI * 2 / 5);
+          const x = Math.cos(angle) * ball.radius * 0.34;
+          const y = Math.sin(angle) * ball.radius * 0.34;
+          if (point === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.fill();
+
+        for (let patch = 0; patch < 5; patch++) {
+          const angle = -Math.PI / 2 + patch * (Math.PI * 2 / 5);
+          ctx.beginPath();
+          ctx.arc(
+            Math.cos(angle) * ball.radius * 0.72,
+            Math.sin(angle) * ball.radius * 0.72,
+            ball.radius * 0.15,
+            0,
+            Math.PI * 2
+          );
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+
+      function drawPowerUp(powerUp) {
+        const isWide = powerUp.type === 'wide';
+        ctx.save();
+        ctx.shadowColor = isWide ? '#62e7d0' : '#a9a5ff';
+        ctx.shadowBlur = 14;
+        ctx.fillStyle = isWide ? '#42c9b1' : '#817be8';
+        ctx.beginPath();
+        ctx.arc(powerUp.x, powerUp.y, powerUp.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#fffdf5';
+        ctx.font = 'bold 15px "Trebuchet MS", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(isWide ? 'W' : 'S', powerUp.x, powerUp.y + 1);
+        ctx.restore();
+      }
+
+      function drawBackground(timestamp) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const sky = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+        sky.addColorStop(0, '#25264f');
+        sky.addColorStop(0.38, '#765078');
+        sky.addColorStop(0.7, '#e47a68');
+        sky.addColorStop(1, '#f6b66b');
+        ctx.fillStyle = sky;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        const sunGlow = ctx.createRadialGradient(480, 170, 8, 480, 170, 105);
+        sunGlow.addColorStop(0, 'rgba(255, 229, 163, 0.95)');
+        sunGlow.addColorStop(0.58, 'rgba(255, 199, 133, 0.75)');
+        sunGlow.addColorStop(1, 'rgba(255, 199, 133, 0)');
+        ctx.fillStyle = sunGlow;
+        ctx.fillRect(360, 50, 240, 240);
+
+        ctx.fillStyle = 'rgba(85, 54, 83, 0.34)';
+        ctx.beginPath();
+        ctx.moveTo(0, 295);
+        ctx.quadraticCurveTo(130, 250, 260, 300);
+        ctx.quadraticCurveTo(405, 345, 620, 275);
+        ctx.lineTo(620, 420);
+        ctx.lineTo(0, 420);
+        ctx.closePath();
+        ctx.fill();
+
+        const horizon = ctx.createLinearGradient(0, 315, 0, 420);
+        horizon.addColorStop(0, 'rgba(40, 43, 66, 0.1)');
+        horizon.addColorStop(1, 'rgba(24, 34, 54, 0.72)');
+        ctx.fillStyle = horizon;
+        ctx.fillRect(0, 315, canvas.width, 105);
+
+        for (let i = 0; i < 72; i++) {
+          const x = (i * 137.5) % canvas.width;
+          const y = (i * 83.7) % canvas.height;
+          const twinkle = 0.3 + 0.45 * (0.5 + 0.5 * Math.sin(timestamp / 520 + i));
+          ctx.fillStyle = `rgba(226, 245, 255, ${twinkle})`;
+          ctx.beginPath();
+          ctx.arc(x, y, i % 9 === 0 ? 1.7 : 1, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      function drawBrokenScreen() {
+        ctx.fillStyle = 'rgba(14, 8, 20, 0.66)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        const centerX = canvas.width * 0.52;
+        const centerY = canvas.height * 0.46;
+        const crackPaths = [];
+        const maxLength = Math.hypot(canvas.width, canvas.height) * 0.7;
+
+        for (let ray = 0; ray < 17; ray++) {
+          const angle = ray * Math.PI * 2 / 17 + Math.sin(ray * 4.7) * 0.12;
+          const length = maxLength * (0.58 + ((ray * 7) % 6) * 0.075);
+          const points = [{ x: centerX, y: centerY }];
+          let bend = 0;
+
+          for (let segment = 1; segment <= 7; segment++) {
+            bend += Math.sin(ray * 9 + segment * 13) * (2.5 + segment * 0.35);
+            const distance = length * segment / 7;
+            points.push({
+              x: centerX + Math.cos(angle) * distance - Math.sin(angle) * bend,
+              y: centerY + Math.sin(angle) * distance + Math.cos(angle) * bend,
+            });
+          }
+          crackPaths.push({ points, width: ray % 5 === 0 ? 2.2 : 1.15 });
+
+          for (let branchIndex = 0; branchIndex < 2; branchIndex++) {
+            const pointIndex = 2 + ((ray * 3 + branchIndex * 2) % 5);
+            const origin = points[pointIndex];
+            const direction = angle + (branchIndex === 0 ? -1 : 1) * (0.48 + (ray % 4) * 0.1);
+            const branchLength = 24 + (ray * 11 + branchIndex * 19) % 52;
+            const branchPoints = [origin];
+            const branchBend = Math.sin(ray * 5 + branchIndex * 7) * 7;
+            branchPoints.push({
+              x: origin.x + Math.cos(direction) * branchLength - Math.sin(direction) * branchBend,
+              y: origin.y + Math.sin(direction) * branchLength + Math.cos(direction) * branchBend,
+            });
+            crackPaths.push({ points: branchPoints, width: 0.8 });
+          }
+        }
+
+        for (let ring = 0; ring < 3; ring++) {
+          const baseRadius = 26 + ring * 25;
+          const points = [];
+          for (let point = 0; point < 22; point++) {
+            const angle = point * Math.PI * 2 / 22;
+            const radius = baseRadius * (0.86 + 0.14 * (0.5 + 0.5 * Math.sin(point * 5 + ring * 3)));
+            points.push({
+              x: centerX + Math.cos(angle) * radius,
+              y: centerY + Math.sin(angle) * radius * 0.82,
+            });
+          }
+          crackPaths.push({ points: [...points, points[0]], width: 0.9 });
+        }
+
+        ctx.save();
+        ctx.lineCap = 'square';
+        ctx.lineJoin = 'miter';
+        for (const crack of crackPaths) {
+          ctx.beginPath();
+          ctx.moveTo(crack.points[0].x, crack.points[0].y);
+          for (let point = 1; point < crack.points.length; point++) {
+            ctx.lineTo(crack.points[point].x, crack.points[point].y);
+          }
+          ctx.strokeStyle = 'rgba(22, 18, 32, 0.82)';
+          ctx.lineWidth = crack.width + 1.4;
+          ctx.stroke();
+          ctx.strokeStyle = 'rgba(226, 240, 255, 0.84)';
+          ctx.lineWidth = crack.width;
+          ctx.stroke();
+        }
+
+        const impactGlow = ctx.createRadialGradient(centerX, centerY, 2, centerX, centerY, 24);
+        impactGlow.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
+        impactGlow.addColorStop(0.18, 'rgba(226, 240, 255, 0.28)');
+        impactGlow.addColorStop(1, 'rgba(226, 240, 255, 0)');
+        ctx.fillStyle = impactGlow;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, 24, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      function drawStartScreen() {
+        drawBackground(0);
+        ctx.fillStyle = 'rgba(8, 13, 28, 0.3)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        const coinX = canvas.width / 2;
+        const coinY = canvas.height / 2 - 28;
+        ctx.beginPath();
+        ctx.arc(coinX, coinY, 54, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255, 209, 102, 0.16)';
+        ctx.fill();
+        ctx.strokeStyle = '#ffd166';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        ctx.fillStyle = '#fff0b5';
+        ctx.font = 'bold 68px "Trebuchet MS", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.shadowColor = 'rgba(255, 209, 102, 0.75)';
+        ctx.shadowBlur = 18;
+        ctx.fillText('$', coinX, coinY + 2);
+        ctx.shadowBlur = 0;
+
+        ctx.fillStyle = '#fffaf0';
+        ctx.font = 'bold 25px "Trebuchet MS", sans-serif';
+        ctx.fillText('STAR CATCHER', canvas.width / 2, canvas.height / 2 + 55);
+        ctx.fillStyle = '#e4e6f0';
+        ctx.font = '17px "Trebuchet MS", sans-serif';
+        ctx.fillText('Press Enter to start', canvas.width / 2, canvas.height / 2 + 88);
+      }
+
+      function gameLoop(timestamp) {
+        if (gameOver) {
+          const lost = statusEl.textContent === 'You lose!';
+          if (lost) {
+            drawBrokenScreen();
+          } else {
+            drawBackground(timestamp);
+            drawDoor();
+            for (const star of stars) drawStar(star);
+            drawBasket();
+            if (plane.active) {
+              plane.x += plane.speed;
+              if (plane.x > canvas.width + 200) plane.x = -180;
+            }
+            drawAirplane();
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.35)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+          }
+          ctx.fillStyle = '#f8fafc';
+          ctx.font = 'bold 30px Arial';
+          ctx.textAlign = 'center';
+          ctx.fillText(lost ? 'SCREEN CRACKED!' : statusEl.textContent, canvas.width / 2, canvas.height / 2);
+          ctx.font = '18px Arial';
+          ctx.fillText(lost ? 'You lose!  Press Enter to retry' : 'Press Enter to play again', canvas.width / 2, canvas.height / 2 + 35);
+          if (!lost) {
+            animationId = requestAnimationFrame(gameLoop);
+          }
+          return;
+        }
+
+        const delta = lastFrame ? timestamp - lastFrame : 16.67;
+        lastFrame = timestamp;
+        handleInput();
+
+        if (timestamp - lastBallSpawn > 1800 && soccerBalls.length < 7) {
+          spawnSoccerBall();
+          lastBallSpawn = timestamp;
+        }
+
+        if (timestamp - lastPowerUpSpawn > 7000 && powerUps.length < 2) {
+          spawnPowerUp();
+          lastPowerUpSpawn = timestamp;
+        }
+
+        if (timestamp - lastSpawn > 480) {
+          spawnStar();
+          lastSpawn = timestamp;
+        }
+
+        updateStars(delta);
+        updateSoccerBalls(delta);
+        updatePowerUps(delta, timestamp);
+
+        drawBackground(timestamp);
+        drawDoor();
+        for (const ball of soccerBalls) drawSoccerBall(ball);
+        for (const powerUp of powerUps) drawPowerUp(powerUp);
+        for (const star of stars) drawStar(star);
+        drawBasket();
+
+        animationId = requestAnimationFrame(gameLoop);
+      }
+
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' && !gameStarted) {
+          gameStarted = true;
+          resetGame();
+          return;
+        }
+        if (event.key === 'ArrowLeft') {
+          event.preventDefault();
+          if (gameStarted && !gameOver) basket.moveLeft = true;
+        }
+        if (event.key === 'ArrowRight') {
+          event.preventDefault();
+          if (gameStarted && !gameOver) basket.moveRight = true;
+        }
+        if (event.key === 'Enter' && gameOver) resetGame();
+      });
+
+      musicButton.addEventListener('click', () => setMusicEnabled(!musicEnabled));
+
+      document.addEventListener('keyup', (event) => {
+        if (event.key === 'ArrowLeft') basket.moveLeft = false;
+        if (event.key === 'ArrowRight') basket.moveRight = false;
+      });
+
+      updateHud();
+      drawStartScreen();
+    </script>
+  </body>
+</html>
