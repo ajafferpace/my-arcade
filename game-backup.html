@@ -76,6 +76,7 @@
         width: 100%;
         height: auto;
         display: block;
+        touch-action: none;
         background: #091627;
         border: 1px solid rgba(211, 239, 232, 0.2);
         border-radius: 6px;
@@ -119,11 +120,10 @@
         height: 18,
         x: canvas.width / 2 - 60,
         y: canvas.height - 30,
-        speed: 9,
-        moveLeft: false,
-        moveRight: false,
       };
 
+      let activePointerId = null;
+      const pressedKeys = new Set();
       let stars = [];
       let soccerBalls = [];
       let powerUps = [];
@@ -231,8 +231,6 @@
         wideBasketUntil = 0;
         basket.width = 120;
         basket.x = canvas.width / 2 - basket.width / 2;
-        basket.moveLeft = false;
-        basket.moveRight = false;
         lastSpawn = 0;
         lastBallSpawn = 0;
         lastPowerUpSpawn = 0;
@@ -388,10 +386,17 @@
         }
       }
 
-      function handleInput() {
-        if (basket.moveLeft) basket.x -= basket.speed;
-        if (basket.moveRight) basket.x += basket.speed;
-        basket.x = Math.max(0, Math.min(canvas.width - basket.width, basket.x));
+      function moveBasketToPointer(event) {
+        const bounds = canvas.getBoundingClientRect();
+        const pointerX = (event.clientX - bounds.left) * (canvas.width / bounds.width);
+        basket.x = Math.max(0, Math.min(canvas.width - basket.width, pointerX - basket.width / 2));
+      }
+
+      function moveBasketWithKeys(delta) {
+        const direction = Number(pressedKeys.has('ArrowRight')) - Number(pressedKeys.has('ArrowLeft'));
+        if (direction === 0) return;
+        const frameScale = Math.min(delta / 16.67, 2.5);
+        basket.x = Math.max(0, Math.min(canvas.width - basket.width, basket.x + direction * 7 * frameScale));
       }
 
       function updateStars(delta) {
@@ -876,7 +881,7 @@
         ctx.fillText('STAR CATCHER', canvas.width / 2, canvas.height / 2 + 55);
         ctx.fillStyle = '#e4e6f0';
         ctx.font = '17px "Trebuchet MS", sans-serif';
-        ctx.fillText('Press Enter to start', canvas.width / 2, canvas.height / 2 + 88);
+        ctx.fillText('Arrow keys or touch and drag to play', canvas.width / 2, canvas.height / 2 + 88);
       }
 
       function gameLoop(timestamp) {
@@ -911,7 +916,8 @@
 
         const delta = lastFrame ? timestamp - lastFrame : 16.67;
         lastFrame = timestamp;
-        handleInput();
+
+        moveBasketWithKeys(delta);
 
         if (timestamp - lastBallSpawn > 1800 && soccerBalls.length < 7) {
           spawnSoccerBall();
@@ -943,28 +949,55 @@
       }
 
       document.addEventListener('keydown', (event) => {
+        if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+          event.preventDefault();
+          pressedKeys.add(event.key);
+          return;
+        }
         if (event.key === 'Enter' && !gameStarted) {
           gameStarted = true;
           resetGame();
           return;
         }
-        if (event.key === 'ArrowLeft') {
-          event.preventDefault();
-          if (gameStarted && !gameOver) basket.moveLeft = true;
-        }
-        if (event.key === 'ArrowRight') {
-          event.preventDefault();
-          if (gameStarted && !gameOver) basket.moveRight = true;
-        }
         if (event.key === 'Enter' && gameOver) resetGame();
       });
 
+      document.addEventListener('keyup', (event) => {
+        pressedKeys.delete(event.key);
+      });
+
+      window.addEventListener('blur', () => pressedKeys.clear());
+
       musicButton.addEventListener('click', () => setMusicEnabled(!musicEnabled));
 
-      document.addEventListener('keyup', (event) => {
-        if (event.key === 'ArrowLeft') basket.moveLeft = false;
-        if (event.key === 'ArrowRight') basket.moveRight = false;
+      canvas.addEventListener('pointerdown', (event) => {
+        if (activePointerId !== null) return;
+        activePointerId = event.pointerId;
+        canvas.setPointerCapture(event.pointerId);
+
+        if (!gameStarted) {
+          gameStarted = true;
+          resetGame();
+        } else if (gameOver) {
+          resetGame();
+        }
+
+        moveBasketToPointer(event);
       });
+
+      canvas.addEventListener('pointermove', (event) => {
+        if (event.pointerId === activePointerId && gameStarted && !gameOver) {
+          moveBasketToPointer(event);
+        }
+      });
+
+      function releasePointer(event) {
+        if (event.pointerId === activePointerId) activePointerId = null;
+      }
+
+      canvas.addEventListener('pointerup', releasePointer);
+      canvas.addEventListener('pointercancel', releasePointer);
+      canvas.addEventListener('lostpointercapture', releasePointer);
 
       updateHud();
       drawStartScreen();
