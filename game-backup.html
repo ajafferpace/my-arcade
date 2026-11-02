@@ -57,7 +57,9 @@
         text-align: right;
       }
 
-      button {
+      button, .back-link {
+        display: inline-flex;
+        align-items: center;
         border: 1px solid rgba(255, 209, 102, 0.55);
         border-radius: 6px;
         background: rgba(255, 209, 102, 0.12);
@@ -67,7 +69,12 @@
         cursor: pointer;
       }
 
-      button:hover, button:focus-visible {
+      .back-link {
+        margin-bottom: 12px;
+        text-decoration: none;
+      }
+
+      button:hover, button:focus-visible, .back-link:hover, .back-link:focus-visible {
         background: rgba(255, 209, 102, 0.24);
         outline: 2px solid transparent;
       }
@@ -96,6 +103,7 @@
   </head>
   <body>
     <div class="game-shell">
+      <a class="back-link" href="index.html">&larr; Back to home</a>
       <div class="hud">
         <div>Stars caught: <span id="caught">0</span>/10</div>
         <div>Misses: <span id="misses">0</span>/3</div>
