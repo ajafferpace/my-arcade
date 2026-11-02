@@ -34,6 +34,24 @@
       line-height: 1.5;
     }
 
+    .game-info {
+      margin: 0 0 36px;
+      padding: 20px;
+      border: 3px solid #102a43;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.35);
+    }
+
+    .game-info h2 {
+      margin: 0 0 8px;
+      font-size: 1.75rem;
+    }
+
+    .game-info p {
+      margin: 0;
+      font-size: 1.2rem;
+    }
+
     .play-button {
       display: inline-block;
       padding: 18px 64px;
@@ -63,7 +81,15 @@
   <main>
     <h1>Adam's Arcade</h1>
     <p>Welcome to the arcade! Jump into Star Catcher, dodge soccer balls, and see how many stars you can catch.</p>
+    <section class="game-info" aria-label="Game information">
+      <h2>Star Catcher</h2>
+      <p>High score: <strong id="highScore">0</strong>/10 stars</p>
+    </section>
     <a class="play-button" href="game-backup.html">Start</a>
   </main>
+  <script>
+    const highScore = Number(localStorage.getItem('starCatcherHighScore')) || 0;
+    document.getElementById('highScore').textContent = String(highScore);
+  </script>
 </body>
 </html>

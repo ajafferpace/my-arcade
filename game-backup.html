@@ -459,6 +459,10 @@
             }
             stars.splice(i, 1);
             caught += bonusValue;
+            const highScore = Number(localStorage.getItem('starCatcherHighScore')) || 0;
+            if (caught > highScore) {
+              localStorage.setItem('starCatcherHighScore', String(caught));
+            }
             playCatchSound();
             if (star.isDoorStar) {
               playTone(1040, 0.18, 'triangle', 0.12);
