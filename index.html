@@ -20,7 +20,7 @@
       margin: 0;
       display: grid;
       place-items: center;
-      padding: 24px;
+      padding: clamp(20px, 5vw, 48px);
       background: linear-gradient(180deg, #021b27, #0b1f2d 45%, #071b2b);
       color: var(--ink);
       font-family: Arial, sans-serif;
@@ -28,7 +28,7 @@
     }
 
     main {
-      width: min(90vw, 840px);
+      width: min(100%, 960px);
     }
 
     h1 {
@@ -45,13 +45,18 @@
 
     .game-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 24px;
     }
 
     .game-card {
-      display: block;
-      padding: 26px 18px 20px;
+      display: flex;
+      min-height: 220px;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      padding: 28px 22px;
       background: var(--panel);
       border: 2px solid rgba(255,255,255,0.12);
       border-radius: 18px;
@@ -78,6 +83,22 @@
       line-height: 1.5;
       opacity: 0.9;
     }
+
+    .game-action {
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    @media (max-width: 600px) {
+      .game-grid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+      }
+
+      .game-card {
+        min-height: 190px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -89,11 +110,13 @@
       <a class="game-card" href="star-catcher.html">
         <h2>Star Catcher</h2>
         <p>Catch 10 stars before 3 misses and keep your streak alive.</p>
+        <span class="game-action">Play Star Catcher &rarr;</span>
       </a>
 
       <a class="game-card" href="falling-platforms.html">
         <h2>Falling Platforms</h2>
         <p>Jump across every platform before the falling ground takes you down.</p>
+        <span class="game-action">Play Falling Platforms &rarr;</span>
       </a>
     </div>
   </main>
