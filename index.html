@@ -5,91 +5,97 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Adam's Arcade</title>
   <style>
+    :root {
+      --bg: #001f2d;
+      --panel: rgba(8, 30, 42, 0.8);
+      --ink: #ecf6ff;
+      --accent: #ffd166;
+      --accent-2: #7bdff2;
+    }
+
+    * { box-sizing: border-box; }
+
     body {
       min-height: 100vh;
       margin: 0;
       display: grid;
       place-items: center;
       padding: 24px;
-      box-sizing: border-box;
-      background-color: #00ffff;
-      color: #102a43;
+      background: linear-gradient(180deg, #021b27, #0b1f2d 45%, #071b2b);
+      color: var(--ink);
       font-family: Arial, sans-serif;
       text-align: center;
     }
 
     main {
-      max-width: 760px;
+      width: min(90vw, 840px);
     }
 
     h1 {
-      margin: 0 0 20px;
-      font-size: clamp(3rem, 12vw, 6rem);
+      margin: 0 0 18px;
+      font-size: clamp(2.8rem, 8vw, 5rem);
       line-height: 1;
     }
 
-    p {
-      margin: 0 0 36px;
-      font-size: clamp(1.1rem, 3vw, 1.5rem);
-      line-height: 1.5;
+    .subtitle {
+      margin: 0 0 32px;
+      font-size: clamp(1.05rem, 2vw, 1.4rem);
+      opacity: 0.9;
     }
 
-    .game-info {
-      margin: 0 0 36px;
-      padding: 20px;
-      border: 3px solid #102a43;
-      border-radius: 16px;
-      background: rgba(255, 255, 255, 0.35);
+    .game-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 24px;
     }
 
-    .game-info h2 {
-      margin: 0 0 8px;
-      font-size: 1.75rem;
-    }
-
-    .game-info p {
-      margin: 0;
-      font-size: 1.2rem;
-    }
-
-    .play-button {
-      display: inline-block;
-      padding: 18px 64px;
-      border: 4px solid #102a43;
-      border-radius: 16px;
-      background: #ffd93d;
-      color: #102a43;
-      font-size: 2rem;
-      font-weight: 700;
+    .game-card {
+      display: block;
+      padding: 26px 18px 20px;
+      background: var(--panel);
+      border: 2px solid rgba(255,255,255,0.12);
+      border-radius: 18px;
+      color: var(--ink);
       text-decoration: none;
-      box-shadow: 0 8px 0 #102a43;
+      box-shadow: 0 18px 40px rgba(0,0,0,0.25);
+      transition: transform 0.15s ease, border-color 0.15s ease;
     }
 
-    .play-button:hover,
-    .play-button:focus-visible {
-      background: #ffe875;
-      transform: translateY(-2px);
+    .game-card:hover,
+    .game-card:focus-visible {
+      transform: translateY(-4px);
+      border-color: rgba(255, 209, 102, 0.9);
     }
 
-    .play-button:active {
-      transform: translateY(4px);
-      box-shadow: 0 4px 0 #102a43;
+    .game-card h2 {
+      margin: 0 0 12px;
+      font-size: 2rem;
+    }
+
+    .game-card p {
+      margin: 0;
+      font-size: 1.05rem;
+      line-height: 1.5;
+      opacity: 0.9;
     }
   </style>
 </head>
 <body>
   <main>
     <h1>Adam's Arcade</h1>
-    <p>Welcome to the arcade! Jump into Star Catcher, dodge soccer balls, and see how many stars you can catch.</p>
-    <section class="game-info" aria-label="Game information">
-      <h2>Star Catcher</h2>
-      <p>High score: <strong id="highScore">0</strong>/10 stars</p>
-    </section>
-    <a class="play-button" href="game-backup.html">Start</a>
+    <p class="subtitle">Choose a game to play</p>
+
+    <div class="game-grid">
+      <a class="game-card" href="star-catcher.html">
+        <h2>Star Catcher</h2>
+        <p>Catch 10 stars before 3 misses and keep your streak alive.</p>
+      </a>
+
+      <a class="game-card" href="falling-platforms.html">
+        <h2>Falling Platforms</h2>
+        <p>Jump across every platform before the falling ground takes you down.</p>
+      </a>
+    </div>
   </main>
-  <script>
-    const highScore = Number(localStorage.getItem('starCatcherHighScore')) || 0;
-    document.getElementById('highScore').textContent = String(highScore);
-  </script>
 </body>
 </html>
