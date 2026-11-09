@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Falling Platforms</title>
+    <style>
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: #0b1220;
+      }
+
+      .frame {
+        position: relative;
+      }
+
+      canvas {
+        display: block;
+        width: min(92vw, 760px);
+        height: auto;
+        background: #091627;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 12px;
+      }
+
+      .back-link {
+        position: absolute;
+        top: 16px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: inline-flex;
+        align-items: center;
+        text-decoration: none;
+        background: rgba(15, 23, 42, 0.7);
+        color: #edf7ff;
+        border: 1px solid rgba(255,255,255,0.12);
+        border-radius: 999px;
+        padding: 8px 14px;
+        z-index: 20;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="frame">
+      <a class="back-link" href="index.html">&larr; Back to arcade</a>
+      <canvas id="gameCanvas" width="760" height="440" aria-label="Falling platforms game"></canvas>
+    </div>
+    <script src="game.js"></script>
+  </body>
+</html>
