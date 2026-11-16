@@ -7,6 +7,9 @@ hud.style.top = '60px';
 hud.style.left = '50%';
 hud.style.transform = 'translateX(-50%)';
 hud.style.display = 'flex';
+hud.style.flexWrap = 'wrap';
+hud.style.justifyContent = 'center';
+hud.style.width = 'min(92vw, 720px)';
 hud.style.alignItems = 'center';
 hud.style.gap = '12px';
 hud.style.padding = '8px 14px';
@@ -27,6 +30,9 @@ levelEl.textContent = 'Level 1';
 const platformCounterEl = document.createElement('div');
 platformCounterEl.textContent = '1/6';
 
+const scoreEl = document.createElement('div');
+const highScoreEl = document.createElement('div');
+
 const restartButton = document.createElement('button');
 restartButton.type = 'button';
 restartButton.textContent = 'Restart';
@@ -39,10 +45,26 @@ restartButton.style.padding = '8px 14px';
 restartButton.style.cursor = 'pointer';
 restartButton.style.font = 'inherit';
 
+const musicButton = document.createElement('button');
+musicButton.type = 'button';
+musicButton.textContent = 'Music: Off';
+musicButton.setAttribute('aria-pressed', 'false');
+musicButton.style.pointerEvents = 'auto';
+musicButton.style.border = '1px solid rgba(255,209,102,0.5)';
+musicButton.style.borderRadius = '999px';
+musicButton.style.background = 'rgba(255, 209, 102, 0.14)';
+musicButton.style.color = '#edf7ff';
+musicButton.style.padding = '8px 14px';
+musicButton.style.cursor = 'pointer';
+musicButton.style.font = 'inherit';
+
 hud.appendChild(platformCounterEl);
+hud.appendChild(scoreEl);
+hud.appendChild(highScoreEl);
 hud.appendChild(levelEl);
 hud.appendChild(statusEl);
 hud.appendChild(restartButton);
+hud.appendChild(musicButton);
 canvas.parentElement.style.position = 'relative';
 canvas.parentElement.insertBefore(hud, canvas);
 
@@ -134,12 +156,94 @@ const state = {
   won: false,
   lost: false,
   level: 1,
+  score: 0,
   levelCompleteUntil: 0,
   reachedCount: 0,
   lossReason: '',
   lastTime: 0,
   startTime: 0,
 };
+
+let highScore = Number(localStorage.getItem('fallingPlatformsHighScore')) || 0;
+let audioContext = null;
+let musicGain = null;
+let musicTimer = null;
+let musicStep = 0;
+let musicEnabled = false;
+
+function getAudioContext() {
+  if (!audioContext) {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return null;
+    audioContext = new AudioContextClass();
+    musicGain = audioContext.createGain();
+    musicGain.gain.value = 0;
+    musicGain.connect(audioContext.destination);
+  }
+  if (audioContext.state === 'suspended') audioContext.resume();
+  return audioContext;
+}
+
+function playMusicTone(frequency, duration, waveform, volume) {
+  if (!audioContext || !musicGain) return;
+
+  const oscillator = audioContext.createOscillator();
+  const noteGain = audioContext.createGain();
+  const now = audioContext.currentTime;
+  oscillator.type = waveform;
+  oscillator.frequency.setValueAtTime(frequency, now);
+  noteGain.gain.setValueAtTime(0.0001, now);
+  noteGain.gain.exponentialRampToValueAtTime(volume, now + 0.015);
+  noteGain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+  oscillator.connect(noteGain);
+  noteGain.connect(musicGain);
+  oscillator.start(now);
+  oscillator.stop(now + duration + 0.02);
+}
+
+function playMusicStep() {
+  const melody = [523, 659, 784, 659, 587, 698, 880, 698, 523, 659, 784, 988, 880, 784, 659, 587];
+  const note = melody[musicStep % melody.length];
+  playMusicTone(note, 0.2, 'sine', 0.035);
+  if (musicStep % 4 === 0) {
+    playMusicTone(note / 2, 0.34, 'triangle', 0.025);
+  }
+  musicStep += 1;
+}
+
+function startMusic() {
+  if (musicTimer || !musicEnabled) return;
+  playMusicStep();
+  musicTimer = window.setInterval(playMusicStep, 230);
+}
+
+function setMusicEnabled(enabled) {
+  if (enabled) {
+    const audio = getAudioContext();
+    if (!audio) {
+      musicButton.textContent = 'Music unavailable';
+      musicButton.disabled = true;
+      return;
+    }
+    musicEnabled = true;
+    musicButton.textContent = 'Music: On';
+    musicButton.setAttribute('aria-pressed', 'true');
+    musicGain.gain.setTargetAtTime(1, audio.currentTime, 0.02);
+    startMusic();
+    return;
+  }
+
+  musicEnabled = false;
+  musicButton.textContent = 'Music: Off';
+  musicButton.setAttribute('aria-pressed', 'false');
+  if (audioContext && musicGain) {
+    musicGain.gain.setTargetAtTime(0, audioContext.currentTime, 0.02);
+  }
+  if (musicTimer) {
+    window.clearInterval(musicTimer);
+    musicTimer = null;
+  }
+}
 
 let platforms = [];
 const platformCount = 6;
@@ -214,13 +318,20 @@ function startLevel() {
   player.jumpOriginId = null;
 
   levelEl.textContent = `Level ${state.level}`;
+  updateScoreDisplay();
   statusEl.textContent = 'Jump the falling platforms';
   platformCounterEl.textContent = '1/6';
 }
 
 function resetGame() {
   state.level = 1;
+  state.score = 0;
   startLevel();
+}
+
+function updateScoreDisplay() {
+  scoreEl.textContent = `Score ${state.score}`;
+  highScoreEl.textContent = `High score ${highScore}`;
 }
 
 function startNextLevel() {
@@ -407,6 +518,12 @@ function handleCollision(previousBottom) {
           player.jumpOriginId !== platform.id) {
         platform.reached = true;
         state.reachedCount += 1;
+        state.score += 1;
+        if (state.score > highScore) {
+          highScore = state.score;
+          localStorage.setItem('fallingPlatformsHighScore', String(highScore));
+        }
+        updateScoreDisplay();
         platformCounterEl.textContent = `${state.reachedCount}/${platformCount}`;
       }
 
@@ -659,6 +776,10 @@ bindTouchButton(jumpButton, 'jump');
 
 restartButton.addEventListener('click', () => {
   resetGame();
+});
+
+musicButton.addEventListener('click', () => {
+  setMusicEnabled(!musicEnabled);
 });
 
 window.addEventListener('pointerdown', () => {
