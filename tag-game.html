@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Starfield Tag</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --ink: #f4f7ff;
+        --cyan: #78e7ff;
+        --yellow: #ffd166;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        min-height: 100vh;
+        margin: 0;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+        background: #071b33;
+        color: var(--ink);
+        font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+      }
+
+      .game-shell {
+        position: relative;
+        width: min(96vw, 900px);
+      }
+
+      .hud {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr 1fr;
+        align-items: center;
+        gap: 12px;
+        height: 54px;
+        padding: 8px 12px;
+        background: rgba(3, 16, 38, 0.95);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-bottom: 0;
+        border-radius: 12px 12px 0 0;
+      }
+
+      .hud strong { color: var(--yellow); }
+
+      .timer {
+        min-width: 116px;
+        text-align: center;
+        font-size: 1.45rem;
+        font-weight: 900;
+      }
+
+      .score { text-align: right; }
+      .high-score { text-align: right; }
+
+      .back-link {
+        color: var(--ink);
+        text-decoration: none;
+        font-size: 0.92rem;
+      }
+
+      canvas {
+        display: block;
+        width: 100%;
+        height: auto;
+        max-height: calc(100vh - 80px);
+        background: #071b33;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 0 0 12px 12px;
+        touch-action: none;
+      }
+
+      .touch-controls {
+        position: absolute;
+        left: 12px;
+        bottom: 12px;
+        z-index: 5;
+        display: none;
+        grid-template-columns: repeat(3, 52px);
+        grid-template-rows: repeat(2, 52px);
+        gap: 6px;
+        pointer-events: none;
+      }
+
+      .touch-controls button {
+        width: 52px;
+        height: 52px;
+        padding: 0;
+        border: 2px solid rgba(120, 231, 255, 0.8);
+        border-radius: 14px;
+        background: rgba(7, 27, 51, 0.82);
+        color: #78e7ff;
+        font-size: 1.45rem;
+        touch-action: none;
+        pointer-events: auto;
+        user-select: none;
+      }
+
+      .touch-controls button:active,
+      .touch-controls button.pressed {
+        background: rgba(120, 231, 255, 0.28);
+        transform: scale(0.96);
+      }
+
+      .touch-controls .up { grid-column: 2; grid-row: 1; }
+      .touch-controls .left { grid-column: 1; grid-row: 2; }
+      .touch-controls .down { grid-column: 2; grid-row: 2; }
+      .touch-controls .right { grid-column: 3; grid-row: 2; }
+
+      .overlay {
+        position: absolute;
+        inset: 54px 0 0;
+        display: grid;
+        place-items: center;
+        background: rgba(3, 12, 31, 0.78);
+        border-radius: 0 0 12px 12px;
+      }
+
+      .overlay.hidden { display: none; }
+
+      .panel {
+        width: min(84%, 420px);
+        padding: 28px;
+        text-align: center;
+        background: rgba(8, 28, 61, 0.96);
+        border: 2px solid var(--cyan);
+        border-radius: 18px;
+        box-shadow: 0 16px 50px rgba(0, 0, 0, 0.4);
+      }
+
+      .panel h1 {
+        margin: 0 0 8px;
+        font-size: clamp(2rem, 8vw, 3.5rem);
+      }
+
+      .panel p {
+        margin: 8px 0 20px;
+        line-height: 1.5;
+      }
+
+      button {
+        border: 0;
+        border-radius: 999px;
+        padding: 12px 22px;
+        background: var(--yellow);
+        color: #08152b;
+        font: 900 1rem "Trebuchet MS", sans-serif;
+        cursor: pointer;
+      }
+
+      @media (max-width: 520px) {
+        .hud {
+          grid-template-columns: 1fr 1fr;
+          height: auto;
+          min-height: 68px;
+          gap: 4px 8px;
+          padding: 6px 10px;
+          font-size: 0.78rem;
+        }
+        .timer { min-width: 0; text-align: right; font-size: 1.05rem; }
+        .score { text-align: left; }
+        .high-score { text-align: right; }
+        .overlay { inset: 68px 0 0; }
+        .back-link { max-width: 58px; display: inline-block; }
+      }
+
+      @media (pointer: coarse) {
+        .touch-controls { display: grid; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="game-shell">
+      <div class="hud">
+        <a class="back-link" href="index.html">&larr; Arcade</a>
+        <div class="timer" id="timer">2:00</div>
+        <div class="score">Your score: <strong id="humanScore">0</strong></div>
+        <div class="high-score">High score: <strong id="highScore">0</strong></div>
+      </div>
+      <canvas id="game" width="900" height="560" aria-label="Starfield Tag game"></canvas>
+      <div class="touch-controls" aria-label="Touch movement controls">
+        <button class="up" type="button" data-direction="up" aria-label="Move up">&#9650;</button>
+        <button class="left" type="button" data-direction="left" aria-label="Move left">&#9664;</button>
+        <button class="down" type="button" data-direction="down" aria-label="Move down">&#9660;</button>
+        <button class="right" type="button" data-direction="right" aria-label="Move right">&#9654;</button>
+      </div>
+      <div class="overlay" id="overlay">
+        <div class="panel">
+          <h1 id="title">STARFIELD TAG</h1>
+          <p id="message">Tag the computer players. Avoid getting tagged yourself.<br />WASD or arrow keys to move.</p>
+          <button id="startButton" type="button">Start Game</button>
+        </div>
+      </div>
+    </main>
+
+    <script>
+      const canvas = document.getElementById("game");
+      const ctx = canvas.getContext("2d");
+      const timerEl = document.getElementById("timer");
+      const humanScoreEl = document.getElementById("humanScore");
+      const highScoreEl = document.getElementById("highScore");
+      const overlay = document.getElementById("overlay");
+      const titleEl = document.getElementById("title");
+      const messageEl = document.getElementById("message");
+      const startButton = document.getElementById("startButton");
+
+      const W = canvas.width;
+      const H = canvas.height;
+      const GAME_LENGTH = 120;
+      const keys = {};
+      const touchButtons = { up: false, down: false, left: false, right: false };
+      let running = false;
+      let startTime = 0;
+      let humanScore = 0;
+      let highScore = Number(localStorage.getItem("starfieldTagHighScore")) || 0;
+      let hitFlash = 0;
+      let lastTagAt = {};
+      highScoreEl.textContent = String(highScore);
+
+      const stars = Array.from({ length: 150 }, () => ({
+        x: Math.random() * W,
+        y: Math.random() * H,
+        r: Math.random() * 1.4 + 0.25,
+        a: Math.random() * 0.65 + 0.35
+      }));
+
+      const obstacles = [
+        { type: "rect", x: 120, y: 130, w: 170, h: 28, angle: -0.18, color: "#5a79a5" },
+        { type: "rect", x: 610, y: 110, w: 150, h: 32, angle: 0.25, color: "#80649c" },
+        { type: "circle", x: 450, y: 280, r: 46, color: "#a34f78" },
+        { type: "rect", x: 210, y: 420, w: 210, h: 26, angle: 0.12, color: "#4d8c95" },
+        { type: "rect", x: 680, y: 390, w: 120, h: 70, angle: -0.35, color: "#8a6d46" },
+        { type: "triangle", x: 60, y: 300, size: 58, color: "#516f70" },
+        { type: "triangle", x: 790, y: 240, size: 48, color: "#66528f" },
+        { type: "rect", x: 410, y: 75, w: 100, h: 22, angle: 0.9, color: "#60769a" }
+      ];
+
+      const cpuColors = ["#ff7b7b", "#ffb86b", "#b9f27c", "#b388ff", "#ff70b5"];
+      const bots = cpuColors.map((color, i) => ({
+        id: i,
+        x: 80 + i * 185,
+        y: 65 + (i % 2) * 410,
+        r: 17,
+        color,
+        angle: 0,
+        speed: 1.7 + i * 0.08,
+        score: 0,
+        stunned: 0,
+        invulnerable: 0,
+        targetX: 0,
+        targetY: 0,
+        retargetAt: 0,
+        blockedFrames: 0,
+        chasingHuman: false
+      }));
+
+      const human = {
+        x: 450,
+        y: 380,
+        r: 19,
+        angle: 0,
+        speed: 3.6,
+        invulnerable: 0
+      };
+
+      function resetPositions() {
+        human.x = 450;
+        human.y = 380;
+        human.invulnerable = 0;
+        humanScore = 0;
+        humanScoreEl.textContent = "0";
+        lastTagAt = {};
+        bots.forEach((bot, i) => {
+          const spawn = findBotSpawn(bot, i);
+          bot.x = spawn.x;
+          bot.y = spawn.y;
+          bot.score = 0;
+          bot.stunned = 0;
+          bot.invulnerable = 0;
+          bot.retargetAt = 0;
+          bot.blockedFrames = 0;
+          bot.chasingHuman = false;
+        });
+      }
+
+      function startGame() {
+        resetPositions();
+        running = true;
+        startTime = performance.now();
+        overlay.classList.add("hidden");
+      }
+
+      function endGame() {
+        running = false;
+        const lost = humanScore < 0;
+        const bestBot = bots.reduce((best, bot) => bot.score > best.score ? bot : best, bots[0]);
+        titleEl.textContent = humanScore >= 10 ? "TAG CHAMPION!" : lost ? "TAGGED OUT!" : "TIME!";
+        messageEl.innerHTML = lost
+          ? `Your score fell below zero.<br />You tagged <strong>${humanScore}</strong> players.`
+          : `You tagged <strong>${humanScore}</strong> players.<br />Can you catch every bot next time?`;
+        messageEl.innerHTML += `<br />Best computer (CPU ${bestBot.id + 1}): <strong>${bestBot.score}</strong> tags.`;
+        startButton.textContent = "Play Again";
+        overlay.classList.remove("hidden");
+      }
+
+      function clampToArena(player) {
+        player.x = Math.max(player.r, Math.min(W - player.r, player.x));
+        player.y = Math.max(player.r, Math.min(H - player.r, player.y));
+      }
+
+      function circleHitsRect(player, rect) {
+        const cos = Math.cos(-rect.angle);
+        const sin = Math.sin(-rect.angle);
+        const dx = player.x - (rect.x + rect.w / 2);
+        const dy = player.y - (rect.y + rect.h / 2);
+        const localX = dx * cos - dy * sin;
+        const localY = dx * sin + dy * cos;
+        const nearestX = Math.max(-rect.w / 2, Math.min(rect.w / 2, localX));
+        const nearestY = Math.max(-rect.h / 2, Math.min(rect.h / 2, localY));
+        const ex = localX - nearestX;
+        const ey = localY - nearestY;
+        return ex * ex + ey * ey < player.r * player.r;
+      }
+
+      function hitsObstacle(player) {
+        for (const obstacle of obstacles) {
+          if (obstacle.type === "circle") {
+            const dx = player.x - obstacle.x;
+            const dy = player.y - obstacle.y;
+            if (dx * dx + dy * dy < (player.r + obstacle.r) * (player.r + obstacle.r)) return true;
+          } else if (obstacle.type === "rect") {
+            if (circleHitsRect(player, obstacle)) return true;
+          } else {
+            const dx = player.x - obstacle.x;
+            const dy = player.y - obstacle.y;
+            if (dx * dx + dy * dy < (player.r + obstacle.size * 0.75) ** 2) return true;
+          }
+        }
+        return false;
+      }
+
+      function chooseBotDestination(bot, now) {
+        for (let attempt = 0; attempt < 40; attempt += 1) {
+          const x = bot.r + Math.random() * (W - bot.r * 2);
+          const y = bot.r + Math.random() * (H - bot.r * 2);
+          if (!hitsObstacle({ x, y, r: bot.r }) && Math.hypot(x - bot.x, y - bot.y) > 180) {
+            bot.targetX = x;
+            bot.targetY = y;
+            bot.retargetAt = now + 3500 + Math.random() * 2500;
+            return;
+          }
+        }
+
+        bot.targetX = bot.x < W / 2 ? W - bot.r : bot.r;
+        bot.targetY = bot.y < H / 2 ? H - bot.r : bot.r;
+        bot.retargetAt = now + 3500;
+      }
+
+      function findBotSpawn(bot, index) {
+        let safeSpawn = null;
+        for (let attempt = 0; attempt < 100; attempt += 1) {
+          const x = bot.r + Math.random() * (W - bot.r * 2);
+          const y = bot.r + Math.random() * (H - bot.r * 2);
+          if (hitsObstacle({ x, y, r: bot.r })) continue;
+          if (!safeSpawn) safeSpawn = { x, y };
+          if (Math.hypot(x - human.x, y - human.y) < 100) continue;
+          const overlapsBot = bots.slice(0, index).some((other) =>
+            Math.hypot(x - other.x, y - other.y) < bot.r + other.r + 24);
+          if (!overlapsBot) return { x, y };
+        }
+        return safeSpawn || { x: bot.r + index * 30, y: bot.r };
+      }
+
+      function movePlayer(player, dx, dy) {
+        const oldX = player.x;
+        const oldY = player.y;
+        player.x += dx;
+        if (hitsObstacle(player)) player.x = oldX;
+        player.y += dy;
+        if (hitsObstacle(player)) player.y = oldY;
+        clampToArena(player);
+      }
+
+      function updateHuman() {
+        let dx = 0;
+        let dy = 0;
+        if (keys.ArrowLeft || keys.a) dx -= 1;
+        if (keys.ArrowRight || keys.d) dx += 1;
+        if (keys.ArrowUp || keys.w) dy -= 1;
+        if (keys.ArrowDown || keys.s) dy += 1;
+        if (touchButtons.left) dx -= 1;
+        if (touchButtons.right) dx += 1;
+        if (touchButtons.up) dy -= 1;
+        if (touchButtons.down) dy += 1;
+        if (touchActive) {
+          dx = touchX;
+          dy = touchY;
+        }
+        if (dx || dy) {
+          const length = Math.hypot(dx, dy);
+          dx = dx / length * human.speed;
+          dy = dy / length * human.speed;
+          human.angle = Math.atan2(dy, dx);
+          movePlayer(human, dx, dy);
+        }
+        human.invulnerable = Math.max(0, human.invulnerable - 1);
+      }
+
+      function updateBots() {
+        const now = performance.now();
+        let closestBotToHuman = null;
+        let closestHumanDistance = Infinity;
+        if (human.invulnerable <= 0) {
+          bots.forEach((bot) => {
+            if (bot.stunned > 0 || bot.invulnerable > 0) return;
+            const distance = Math.hypot(human.x - bot.x, human.y - bot.y);
+            if (distance < closestHumanDistance) {
+              closestBotToHuman = bot;
+              closestHumanDistance = distance;
+            }
+          });
+        }
+
+        bots.forEach((bot) => {
+          if (bot.stunned > 0) {
+            bot.stunned -= 1;
+            return;
+          }
+          bot.invulnerable = Math.max(0, bot.invulnerable - 1);
+
+          const humanDistance = Math.hypot(human.x - bot.x, human.y - bot.y);
+          const shouldChaseHuman = bot === closestBotToHuman && humanDistance < 190;
+          if (shouldChaseHuman) {
+            bot.targetX = human.x;
+            bot.targetY = human.y;
+            bot.chasingHuman = true;
+          } else {
+            if (bot.chasingHuman) {
+              bot.chasingHuman = false;
+              bot.retargetAt = 0;
+            }
+            if (now >= bot.retargetAt ||
+              Math.hypot(bot.targetX - bot.x, bot.targetY - bot.y) < 32) {
+              chooseBotDestination(bot, now);
+            }
+          }
+
+          const dxToTarget = bot.targetX - bot.x;
+          const dyToTarget = bot.targetY - bot.y;
+          const targetDistance = Math.hypot(dxToTarget, dyToTarget) || 1;
+          let separationX = 0;
+          let separationY = 0;
+          bots.forEach((other) => {
+            if (other === bot) return;
+            const awayX = bot.x - other.x;
+            const awayY = bot.y - other.y;
+            const distance = Math.hypot(awayX, awayY);
+            if (distance < 110) {
+              const strength = (110 - distance) / 110;
+              if (distance > 0) {
+                separationX += awayX / distance * strength;
+                separationY += awayY / distance * strength;
+              } else {
+                const angle = (bot.id - other.id) * Math.PI * 2 / bots.length;
+                separationX += Math.cos(angle) * strength;
+                separationY += Math.sin(angle) * strength;
+              }
+            }
+          });
+          const desiredX = dxToTarget / targetDistance + separationX * 1.25;
+          const desiredY = dyToTarget / targetDistance + separationY * 1.25;
+          const desiredAngle = Math.atan2(desiredY, desiredX);
+          const offsets = [0, 0.55, -0.55, 1.1, -1.1, 1.7, -1.7, Math.PI];
+          let moveAngle = desiredAngle;
+          let bestScore = -Infinity;
+
+          for (const offset of offsets) {
+            const angle = desiredAngle + offset;
+            const probe = {
+              x: bot.x + Math.cos(angle) * bot.speed * 4,
+              y: bot.y + Math.sin(angle) * bot.speed * 4,
+              r: bot.r
+            };
+            if (probe.x < bot.r || probe.x > W - bot.r ||
+              probe.y < bot.r || probe.y > H - bot.r ||
+              hitsObstacle(probe)) continue;
+            const score = Math.cos(offset);
+            if (score > bestScore) {
+              bestScore = score;
+              moveAngle = angle;
+            }
+          }
+
+          const oldX = bot.x;
+          const oldY = bot.y;
+          bot.angle = moveAngle;
+          movePlayer(bot, Math.cos(moveAngle) * bot.speed, Math.sin(moveAngle) * bot.speed);
+          if (Math.hypot(bot.x - oldX, bot.y - oldY) < bot.speed * 0.25) {
+            bot.blockedFrames += 1;
+          } else {
+            bot.blockedFrames = 0;
+          }
+          if (bot.blockedFrames > 45) {
+            chooseBotDestination(bot, now);
+            bot.blockedFrames = 0;
+          }
+        });
+      }
+
+      function tryTags() {
+        const pairs = [];
+
+        bots.forEach((bot) => {
+          pairs.push([bot, human]);
+          pairs.push([human, bot]);
+          bots.forEach((other) => {
+            if (bot !== other) pairs.push([bot, other]);
+          });
+        });
+
+        for (const [tagger, target] of pairs) {
+          const dx = target.x - tagger.x;
+          const dy = target.y - tagger.y;
+          if (dx * dx + dy * dy > (tagger.r + target.r + 4) ** 2) continue;
+
+          const aKey = tagger === human ? "human" : `bot-${tagger.id}`;
+          const bKey = target === human ? "human" : `bot-${target.id}`;
+          const key = [aKey, bKey].sort().join("-");
+          if (lastTagAt[key] && performance.now() - lastTagAt[key] < 350) continue;
+          if (target.invulnerable > 0 || tagger.invulnerable > 0 || tagger.stunned > 0) continue;
+
+          if (target === human) {
+            const arrowDirectionX = Math.cos(human.angle);
+            const arrowDirectionY = Math.sin(human.angle);
+            const taggerSide = (tagger.x - human.x) * arrowDirectionX +
+              (tagger.y - human.y) * arrowDirectionY;
+            if (taggerSide >= 0) continue;
+          }
+
+          lastTagAt[key] = performance.now();
+          if (tagger === human) {
+            humanScore += 1;
+            humanScoreEl.textContent = String(humanScore);
+            if (humanScore > highScore) {
+              highScore = humanScore;
+              highScoreEl.textContent = String(highScore);
+              localStorage.setItem("starfieldTagHighScore", String(highScore));
+            }
+            target.invulnerable = 36;
+            target.stunned = 12;
+            target.x -= (dx / (Math.hypot(dx, dy) || 1)) * 18;
+            target.y -= (dy / (Math.hypot(dx, dy) || 1)) * 18;
+            hitFlash = 8;
+          } else if (target === human) {
+            human.invulnerable = 150;
+            humanScore -= 1;
+            humanScoreEl.textContent = String(humanScore);
+            tagger.score += 1;
+            human.x -= (dx / (Math.hypot(dx, dy) || 1)) * 26;
+            human.y -= (dy / (Math.hypot(dx, dy) || 1)) * 26;
+            tagger.invulnerable = 120;
+            tagger.stunned = 18;
+            hitFlash = 14;
+            if (humanScore < 0) {
+              endGame();
+              return;
+            }
+          } else if (tagger.invulnerable <= 0) {
+            target.invulnerable = 80;
+            target.stunned = 16;
+            tagger.score += 1;
+          }
+        }
+      }
+
+      function drawArena() {
+        ctx.fillStyle = "#071b33";
+        ctx.fillRect(0, 0, W, H);
+        for (const star of stars) {
+          ctx.globalAlpha = star.a;
+          ctx.fillStyle = "#ffffff";
+          ctx.beginPath();
+          ctx.arc(star.x, star.y, star.r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+
+        obstacles.forEach((obstacle) => {
+          ctx.save();
+          ctx.fillStyle = obstacle.color;
+          ctx.strokeStyle = "rgba(230, 240, 255, 0.35)";
+          ctx.lineWidth = 2;
+          if (obstacle.type === "rect") {
+            ctx.translate(obstacle.x + obstacle.w / 2, obstacle.y + obstacle.h / 2);
+            ctx.rotate(obstacle.angle);
+            ctx.fillRect(-obstacle.w / 2, -obstacle.h / 2, obstacle.w, obstacle.h);
+            ctx.strokeRect(-obstacle.w / 2, -obstacle.h / 2, obstacle.w, obstacle.h);
+          } else if (obstacle.type === "circle") {
+            ctx.beginPath();
+            ctx.arc(obstacle.x, obstacle.y, obstacle.r, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+          } else {
+            ctx.beginPath();
+            ctx.moveTo(obstacle.x, obstacle.y - obstacle.size);
+            ctx.lineTo(obstacle.x - obstacle.size * 0.9, obstacle.y + obstacle.size * 0.7);
+            ctx.lineTo(obstacle.x + obstacle.size * 0.9, obstacle.y + obstacle.size * 0.7);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+          }
+          ctx.restore();
+        });
+      }
+
+      function drawPlayer(player, isHuman) {
+        ctx.save();
+        ctx.translate(player.x, player.y);
+        ctx.rotate(player.angle);
+        if (player.invulnerable > 0) ctx.globalAlpha = 0.45 + Math.abs(Math.sin(performance.now() / 70)) * 0.45;
+        ctx.shadowColor = isHuman ? "#78e7ff" : player.color;
+        ctx.shadowBlur = isHuman ? 16 : 9;
+        ctx.fillStyle = isHuman ? "#78e7ff" : player.color;
+        ctx.beginPath();
+        ctx.arc(0, 0, player.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = "#09142d";
+        ctx.beginPath();
+        ctx.moveTo(player.r - 2, 0);
+        ctx.lineTo(player.r - 9, -7);
+        ctx.lineTo(player.r - 9, 7);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+        ctx.globalAlpha = 1;
+      }
+
+      function drawTouchControls() {
+        if (!touchActive) return;
+        ctx.save();
+        ctx.globalAlpha = 0.7;
+        ctx.strokeStyle = "#78e7ff";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(touchOriginX, touchOriginY, 42, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = "#78e7ff";
+        ctx.beginPath();
+        ctx.arc(touchOriginX + touchX * 32, touchOriginY + touchY * 32, 14, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      function loop(now) {
+        if (running) {
+          updateHuman();
+          updateBots();
+          tryTags();
+          const elapsed = (now - startTime) / 1000;
+          const remaining = Math.max(0, GAME_LENGTH - elapsed);
+          const totalSeconds = Math.ceil(remaining);
+          timerEl.textContent = `${Math.floor(totalSeconds / 60)}:${(totalSeconds % 60).toString().padStart(2, "0")}`;
+          if (remaining <= 0) endGame();
+        }
+
+        drawArena();
+        bots.forEach((bot) => drawPlayer(bot, false));
+        drawPlayer(human, true);
+        drawTouchControls();
+
+        if (hitFlash > 0) {
+          hitFlash -= 1;
+          ctx.fillStyle = `rgba(255, 180, 180, ${hitFlash / 30})`;
+          ctx.fillRect(0, 54, W, H - 54);
+        }
+        requestAnimationFrame(loop);
+      }
+
+      let touchActive = false;
+      let touchOriginX = 0;
+      let touchOriginY = 0;
+      let touchX = 0;
+      let touchY = 0;
+
+      function pointerPosition(event) {
+        const rect = canvas.getBoundingClientRect();
+        return {
+          x: (event.clientX - rect.left) * W / rect.width,
+          y: (event.clientY - rect.top) * H / rect.height
+        };
+      }
+
+      canvas.addEventListener("pointerdown", (event) => {
+        if (!running) return;
+        const point = pointerPosition(event);
+        touchOriginX = point.x;
+        touchOriginY = point.y;
+        touchActive = true;
+        canvas.setPointerCapture(event.pointerId);
+      });
+
+      canvas.addEventListener("pointermove", (event) => {
+        if (!touchActive) return;
+        const point = pointerPosition(event);
+        touchX = Math.max(-1, Math.min(1, (point.x - touchOriginX) / 42));
+        touchY = Math.max(-1, Math.min(1, (point.y - touchOriginY) / 42));
+      });
+
+      canvas.addEventListener("pointerup", () => {
+        touchActive = false;
+        touchX = 0;
+        touchY = 0;
+      });
+
+      window.addEventListener("keydown", (event) => {
+        const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+        if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", " ", "w", "a", "s", "d"].includes(key)) {
+          event.preventDefault();
+        }
+        keys[key] = true;
+      });
+
+      window.addEventListener("keyup", (event) => {
+        keys[event.key.length === 1 ? event.key.toLowerCase() : event.key] = false;
+      });
+
+      window.addEventListener("blur", () => {
+        Object.keys(keys).forEach((key) => { keys[key] = false; });
+        Object.keys(touchButtons).forEach((direction) => { touchButtons[direction] = false; });
+        touchActive = false;
+      });
+
+      document.querySelectorAll(".touch-controls button").forEach((button) => {
+        const direction = button.dataset.direction;
+
+        button.addEventListener("pointerdown", (event) => {
+          if (!running) return;
+          event.preventDefault();
+          button.setPointerCapture(event.pointerId);
+          button.classList.add("pressed");
+          touchButtons[direction] = true;
+        });
+
+        const release = () => {
+          button.classList.remove("pressed");
+          touchButtons[direction] = false;
+        };
+        button.addEventListener("pointerup", release);
+        button.addEventListener("pointercancel", release);
+        button.addEventListener("lostpointercapture", release);
+      });
+
+      startButton.addEventListener("click", startGame);
+      resetPositions();
+      requestAnimationFrame(loop);
+    </script>
+  </body>
+</html>
