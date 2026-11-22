@@ -89,6 +89,73 @@
       font-weight: 700;
     }
 
+    button.game-card {
+      width: 100%;
+      font-family: inherit;
+      cursor: pointer;
+    }
+
+    .tag-game-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      display: none;
+      place-items: center;
+      padding: 16px;
+      background: rgba(1, 12, 22, 0.92);
+    }
+
+    .tag-game-modal.open {
+      display: grid;
+    }
+
+    .tag-game-window {
+      width: min(96vw, 960px);
+      height: min(92vh, 680px);
+      display: grid;
+      grid-template-rows: 48px 1fr;
+      overflow: hidden;
+      background: #071b33;
+      border: 2px solid var(--accent-2);
+      border-radius: 14px;
+      box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
+    }
+
+    .tag-game-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 10px 6px 16px;
+      background: #031626;
+    }
+
+    .tag-game-bar strong {
+      color: var(--accent);
+    }
+
+    .back-button {
+      padding: 8px 14px;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: 999px;
+      background: transparent;
+      color: var(--ink);
+      font: 700 0.95rem Arial, sans-serif;
+      cursor: pointer;
+    }
+
+    .back-button:hover,
+    .back-button:focus-visible {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .tag-game-window iframe {
+      width: 100%;
+      height: 100%;
+      border: 0;
+      background: #071b33;
+    }
+
     @media (max-width: 600px) {
       .game-grid {
         grid-template-columns: 1fr;
@@ -118,7 +185,58 @@
         <p>Jump across every platform before the falling ground takes you down.</p>
         <span class="game-action">Play Falling Platforms &rarr;</span>
       </a>
+
+      <button class="game-card" id="openTagGame" type="button">
+        <h2>Starfield Tag</h2>
+        <p>Tag the computer players and avoid getting tagged yourself.</p>
+        <span class="game-action">Play Starfield Tag &rarr;</span>
+      </button>
+
     </div>
   </main>
+
+  <div class="tag-game-modal" id="tagGameModal" role="dialog" aria-modal="true" aria-label="Starfield Tag game">
+    <div class="tag-game-window">
+      <div class="tag-game-bar">
+        <strong>Starfield Tag</strong>
+        <button class="back-button" id="closeTagGame" type="button">&larr; Back to Arcade</button>
+      </div>
+      <iframe id="tagGameFrame" title="Starfield Tag" allow="fullscreen"></iframe>
+    </div>
+  </div>
+
+  <script>
+    const openTagGame = document.getElementById("openTagGame");
+    const closeTagGame = document.getElementById("closeTagGame");
+    const tagGameModal = document.getElementById("tagGameModal");
+    const tagGameFrame = document.getElementById("tagGameFrame");
+
+    function openTagGameModal() {
+      tagGameFrame.src = "tag-game.html";
+      tagGameModal.classList.add("open");
+      document.body.style.overflow = "hidden";
+      closeTagGame.focus();
+    }
+
+    function closeTagGameModal() {
+      tagGameModal.classList.remove("open");
+      document.body.style.overflow = "";
+      tagGameFrame.removeAttribute("src");
+      openTagGame.focus();
+    }
+
+    openTagGame.addEventListener("click", openTagGameModal);
+    closeTagGame.addEventListener("click", closeTagGameModal);
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && tagGameModal.classList.contains("open")) {
+        closeTagGameModal();
+      }
+    });
+    window.addEventListener("message", (event) => {
+      if (event.data === "closeTagGame") {
+        closeTagGameModal();
+      }
+    });
+  </script>
 </body>
 </html>
