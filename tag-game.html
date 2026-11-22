@@ -174,7 +174,7 @@
   <body>
     <main class="game-shell">
       <div class="hud">
-        <a class="back-link" href="index.html">&larr; Arcade</a>
+        <a class="back-link" id="backToArcade" href="index.html">&larr; Back to Arcade</a>
         <div class="timer" id="timer">2:00</div>
         <div class="score">Your score: <strong id="humanScore">0</strong></div>
         <div class="high-score">High score: <strong id="highScore">0</strong></div>
@@ -205,6 +205,14 @@
       const titleEl = document.getElementById("title");
       const messageEl = document.getElementById("message");
       const startButton = document.getElementById("startButton");
+      const backToArcade = document.getElementById("backToArcade");
+
+      backToArcade.addEventListener("click", (event) => {
+        if (window.parent !== window) {
+          event.preventDefault();
+          window.parent.postMessage("closeTagGame", "*");
+        }
+      });
 
       const W = canvas.width;
       const H = canvas.height;
