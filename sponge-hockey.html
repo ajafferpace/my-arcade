@@ -165,6 +165,8 @@
         border: 1px solid rgba(255, 255, 255, 0.2);
         border-radius: 999px;
         padding: 8px 12px;
+        font: 700 0.95rem "Trebuchet MS", "Segoe UI", sans-serif;
+        cursor: pointer;
       }
 
       @media (max-width: 600px) {
@@ -178,7 +180,7 @@
     </style>
   </head>
   <body>
-    <a class="back-link" href="index.html">&larr; Arcade</a>
+    <button class="back-link" id="backToArcade" type="button">&larr; Arcade</button>
 
     <main class="game-shell">
       <div class="hud">
@@ -221,6 +223,15 @@
       const titleEl = document.getElementById("title");
       const messageEl = document.getElementById("message");
       const startButton = document.getElementById("startButton");
+      const backToArcade = document.getElementById("backToArcade");
+
+      backToArcade.addEventListener("click", () => {
+        if (window.parent !== window) {
+          window.parent.postMessage("closeSpongeHockey", "*");
+        } else {
+          window.location.href = "index.html";
+        }
+      });
 
       const W = canvas.width;
       const H = canvas.height;
