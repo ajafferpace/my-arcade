@@ -105,11 +105,13 @@
       background: rgba(1, 12, 22, 0.92);
     }
 
-    .tag-game-modal.open {
+    .tag-game-modal.open,
+    .sponge-hockey-modal.open {
       display: grid;
     }
 
-    .tag-game-window {
+    .tag-game-window,
+    .sponge-hockey-window {
       width: min(96vw, 960px);
       height: min(92vh, 680px);
       display: grid;
@@ -121,7 +123,8 @@
       box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
     }
 
-    .tag-game-bar {
+    .tag-game-bar,
+    .sponge-hockey-bar {
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -129,7 +132,8 @@
       background: #031626;
     }
 
-    .tag-game-bar strong {
+    .tag-game-bar strong,
+    .sponge-hockey-bar strong {
       color: var(--accent);
     }
 
@@ -149,11 +153,22 @@
       color: var(--accent);
     }
 
-    .tag-game-window iframe {
+    .tag-game-window iframe,
+    .sponge-hockey-window iframe {
       width: 100%;
       height: 100%;
       border: 0;
       background: #071b33;
+    }
+
+    .sponge-hockey-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      display: none;
+      place-items: center;
+      padding: 16px;
+      background: rgba(1, 12, 22, 0.92);
     }
 
     @media (max-width: 600px) {
@@ -192,6 +207,12 @@
         <span class="game-action">Play Starfield Tag &rarr;</span>
       </button>
 
+      <button class="game-card" id="openSpongeHockey" type="button">
+        <h2>Sponge Hockey</h2>
+        <p>Two-player basketball hockey on a soccer field. WASD vs arrow keys.</p>
+        <span class="game-action">Play Sponge Hockey &rarr;</span>
+      </button>
+
     </div>
   </main>
 
@@ -205,11 +226,25 @@
     </div>
   </div>
 
+  <div class="sponge-hockey-modal" id="spongeHockeyModal" role="dialog" aria-modal="true" aria-label="Sponge Hockey game">
+    <div class="sponge-hockey-window">
+      <div class="sponge-hockey-bar">
+        <strong>Sponge Hockey</strong>
+        <button class="back-button" id="closeSpongeHockey" type="button">&larr; Back to Arcade</button>
+      </div>
+      <iframe id="spongeHockeyFrame" title="Sponge Hockey" allow="fullscreen"></iframe>
+    </div>
+  </div>
+
   <script>
     const openTagGame = document.getElementById("openTagGame");
     const closeTagGame = document.getElementById("closeTagGame");
     const tagGameModal = document.getElementById("tagGameModal");
     const tagGameFrame = document.getElementById("tagGameFrame");
+    const openSpongeHockey = document.getElementById("openSpongeHockey");
+    const closeSpongeHockey = document.getElementById("closeSpongeHockey");
+    const spongeHockeyModal = document.getElementById("spongeHockeyModal");
+    const spongeHockeyFrame = document.getElementById("spongeHockeyFrame");
 
     function openTagGameModal() {
       tagGameFrame.src = "tag-game.html";
@@ -225,16 +260,38 @@
       openTagGame.focus();
     }
 
+    function openSpongeHockeyModal() {
+      spongeHockeyFrame.src = "sponge-hockey.html";
+      spongeHockeyModal.classList.add("open");
+      document.body.style.overflow = "hidden";
+      closeSpongeHockey.focus();
+    }
+
+    function closeSpongeHockeyModal() {
+      spongeHockeyModal.classList.remove("open");
+      document.body.style.overflow = "";
+      spongeHockeyFrame.removeAttribute("src");
+      openSpongeHockey.focus();
+    }
+
     openTagGame.addEventListener("click", openTagGameModal);
     closeTagGame.addEventListener("click", closeTagGameModal);
+    openSpongeHockey.addEventListener("click", openSpongeHockeyModal);
+    closeSpongeHockey.addEventListener("click", closeSpongeHockeyModal);
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape" && tagGameModal.classList.contains("open")) {
         closeTagGameModal();
+      }
+      if (event.key === "Escape" && spongeHockeyModal.classList.contains("open")) {
+        closeSpongeHockeyModal();
       }
     });
     window.addEventListener("message", (event) => {
       if (event.data === "closeTagGame") {
         closeTagGameModal();
+      }
+      if (event.data === "closeSpongeHockey") {
+        closeSpongeHockeyModal();
       }
     });
   </script>
