@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sponge Soccer Hockey</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --ink: #fffdf3;
+        --yellow: #ffd166;
+        --cyan: #67d9ff;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        min-height: 100vh;
+        margin: 0;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 50% 20%, rgba(47, 101, 139, 0.35), transparent 38%),
+          #071827;
+        color: var(--ink);
+        font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+      }
+
+      .game-shell {
+        width: min(96vw, 980px);
+      }
+
+      .hud {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        align-items: center;
+        min-height: 66px;
+        padding: 8px 14px;
+        background: rgba(4, 20, 31, 0.96);
+        border: 2px solid rgba(255, 255, 255, 0.16);
+        border-bottom: 0;
+        border-radius: 14px 14px 0 0;
+      }
+
+      .score {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: clamp(1rem, 3vw, 1.35rem);
+        font-weight: 900;
+      }
+
+      .score.right {
+        justify-content: flex-end;
+      }
+
+      .score .number {
+        display: grid;
+        width: 48px;
+        height: 48px;
+        place-items: center;
+        border: 3px solid currentColor;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.08);
+        color: var(--yellow);
+        font-size: 1.65rem;
+      }
+
+      .score.right .number {
+        color: var(--cyan);
+      }
+
+      .center-hud {
+        min-width: 150px;
+        text-align: center;
+      }
+
+      .center-hud strong {
+        display: block;
+        color: var(--yellow);
+        font-size: 1.55rem;
+        letter-spacing: 0.08em;
+      }
+
+      .center-hud small {
+        color: #b9d7e3;
+      }
+
+      canvas {
+        display: block;
+        width: 100%;
+        height: auto;
+        max-height: calc(100vh - 90px);
+        border: 2px solid rgba(255, 255, 255, 0.16);
+        border-radius: 0 0 14px 14px;
+        background: #2f963c;
+        touch-action: none;
+      }
+
+      .overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 20;
+        display: grid;
+        place-items: center;
+        padding: 20px;
+        background: rgba(2, 13, 24, 0.82);
+      }
+
+      .overlay.hidden { display: none; }
+
+      .panel {
+        width: min(92vw, 520px);
+        padding: 28px;
+        text-align: center;
+        background: #102b3b;
+        border: 3px solid var(--yellow);
+        border-radius: 20px;
+        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.48);
+      }
+
+      .panel h1 {
+        margin: 0 0 8px;
+        color: var(--yellow);
+        font-size: clamp(2.1rem, 8vw, 4rem);
+        line-height: 0.95;
+      }
+
+      .controls {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin: 18px 0;
+      }
+
+      .control-card {
+        padding: 10px;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.07);
+        line-height: 1.35;
+      }
+
+      .control-card strong { color: var(--yellow); }
+      .control-card:last-child strong { color: var(--cyan); }
+
+      button {
+        border: 0;
+        border-radius: 999px;
+        padding: 13px 24px;
+        background: var(--yellow);
+        color: #10202a;
+        font: 900 1.05rem "Trebuchet MS", sans-serif;
+        cursor: pointer;
+      }
+
+      .back-link {
+        position: absolute;
+        top: 14px;
+        left: 14px;
+        z-index: 5;
+        color: white;
+        text-decoration: none;
+        background: rgba(4, 20, 31, 0.78);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 999px;
+        padding: 8px 12px;
+      }
+
+      @media (max-width: 600px) {
+        .hud { min-height: 56px; padding: 5px 8px; }
+        .score { gap: 5px; font-size: 0.82rem; }
+        .score .number { width: 38px; height: 38px; font-size: 1.25rem; }
+        .center-hud { min-width: 96px; }
+        .center-hud strong { font-size: 1.05rem; }
+        .back-link { top: 8px; left: 8px; font-size: 0.78rem; }
+      }
+    </style>
+  </head>
+  <body>
+    <a class="back-link" href="index.html">&larr; Arcade</a>
+
+    <main class="game-shell">
+      <div class="hud">
+        <div class="score">
+          <span>P1</span>
+          <span class="number" id="score1">0</span>
+        </div>
+        <div class="center-hud">
+          <strong id="timer">1:30</strong>
+          <small id="status">FIRST TO 7</small>
+        </div>
+        <div class="score right">
+          <span class="number" id="score2">0</span>
+          <span>P2</span>
+        </div>
+      </div>
+      <canvas id="game" width="900" height="560" aria-label="Sponge Soccer Hockey game"></canvas>
+    </main>
+
+    <div class="overlay" id="overlay">
+      <div class="panel">
+        <h1 id="title">SPONGE<br />HOCKEY</h1>
+        <p id="message">Push the basketball into the other goal. First to 7 wins!</p>
+        <div class="controls">
+          <div class="control-card"><strong>Player 1</strong><br />W A S D</div>
+          <div class="control-card"><strong>Player 2</strong><br />Arrow Keys</div>
+        </div>
+        <button id="startButton" type="button">Start Match</button>
+      </div>
+    </div>
+
+    <script>
+      const canvas = document.getElementById("game");
+      const ctx = canvas.getContext("2d");
+      const score1El = document.getElementById("score1");
+      const score2El = document.getElementById("score2");
+      const timerEl = document.getElementById("timer");
+      const statusEl = document.getElementById("status");
+      const overlay = document.getElementById("overlay");
+      const titleEl = document.getElementById("title");
+      const messageEl = document.getElementById("message");
+      const startButton = document.getElementById("startButton");
+
+      const W = canvas.width;
+      const H = canvas.height;
+      const MAX_BALL_SPEED = 700;
+      const keys = {};
+      let running = false;
+      let matchOver = false;
+      let score1 = 0;
+      let score2 = 0;
+      let timeLeft = 90;
+      let lastTick = 0;
+      let goalPause = 0;
+
+      const p1 = { x: 245, y: 280, r: 29, speed: 270, angle: 0, vx: 0, vy: 0 };
+      const p2 = { x: 655, y: 280, r: 29, speed: 270, angle: Math.PI, vx: 0, vy: 0 };
+      const ball = { x: 450, y: 280, r: 22, vx: 0, vy: 0 };
+
+      const field = { left: 38, right: 862, top: 38, bottom: 522 };
+      const goal = { top: 218, bottom: 342 };
+
+      function resetPositions(direction = 0) {
+        p1.x = 245; p1.y = 280; p1.vx = 0; p1.vy = 0;
+        p2.x = 655; p2.y = 280; p2.vx = 0; p2.vy = 0;
+        ball.x = 450; ball.y = 280;
+        ball.vx = direction * 40;
+        ball.vy = 0;
+      }
+
+      function startMatch() {
+        score1 = 0;
+        score2 = 0;
+        timeLeft = 90;
+        matchOver = false;
+        goalPause = 0;
+        resetPositions();
+        score1El.textContent = "0";
+        score2El.textContent = "0";
+        statusEl.textContent = "FIRST TO 7";
+        overlay.classList.add("hidden");
+        running = true;
+        lastTick = performance.now();
+        requestAnimationFrame(loop);
+      }
+
+      startButton.addEventListener("click", startMatch);
+
+      window.addEventListener("keydown", (event) => {
+        const controlKeys = ["w", "a", "s", "d", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"];
+        if (controlKeys.includes(event.key)) event.preventDefault();
+        keys[normalizeKey(event.key)] = true;
+      });
+
+      window.addEventListener("keyup", (event) => {
+        keys[normalizeKey(event.key)] = false;
+      });
+
+      function normalizeKey(key) {
+        return String(key).toLowerCase();
+      }
+
+      function movePlayer(player, left, right, up, down, dt) {
+        let dx = (keys[right] ? 1 : 0) - (keys[left] ? 1 : 0);
+        let dy = (keys[down] ? 1 : 0) - (keys[up] ? 1 : 0);
+        if (dx && dy) { dx *= 0.7071; dy *= 0.7071; }
+        player.vx = dx * player.speed;
+        player.vy = dy * player.speed;
+        player.x += player.vx * dt;
+        player.y += player.vy * dt;
+        if (dx || dy) player.angle = Math.atan2(dy, dx);
+
+        player.x = Math.max(field.left + player.r, Math.min(field.right - player.r, player.x));
+        player.y = Math.max(field.top + player.r, Math.min(field.bottom - player.r, player.y));
+      }
+
+      function collideCircle(a, b, bounce) {
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const dist = Math.hypot(dx, dy) || 0.001;
+        const minDist = a.r + b.r;
+        if (dist >= minDist) return false;
+
+        const nx = dx / dist;
+        const ny = dy / dist;
+        const overlap = minDist - dist;
+        b.x += nx * overlap;
+        b.y += ny * overlap;
+
+        const relative = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny;
+        if (relative < 0) {
+          b.vx -= (1 + bounce) * relative * nx;
+          b.vy -= (1 + bounce) * relative * ny;
+          const speed = Math.hypot(b.vx, b.vy);
+          if (speed > MAX_BALL_SPEED) {
+            b.vx = b.vx / speed * MAX_BALL_SPEED;
+            b.vy = b.vy / speed * MAX_BALL_SPEED;
+          }
+        }
+        return true;
+      }
+
+      function collidePlayers(a, b) {
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const distance = Math.hypot(dx, dy);
+        const minDistance = a.r + b.r;
+        if (distance >= minDistance) return;
+
+        const nx = distance > 0.001 ? dx / distance : 1;
+        const ny = distance > 0.001 ? dy / distance : 0;
+        const overlap = minDistance - distance;
+        a.x -= nx * overlap / 2;
+        a.y -= ny * overlap / 2;
+        b.x += nx * overlap / 2;
+        b.y += ny * overlap / 2;
+
+        const relative = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny;
+        if (relative < 0) {
+          const impulse = -(1.2 * relative) / 2;
+          a.vx -= impulse * nx;
+          a.vy -= impulse * ny;
+          b.vx += impulse * nx;
+          b.vy += impulse * ny;
+        }
+
+        a.x = Math.max(field.left + a.r, Math.min(field.right - a.r, a.x));
+        a.y = Math.max(field.top + a.r, Math.min(field.bottom - a.r, a.y));
+        b.x = Math.max(field.left + b.r, Math.min(field.right - b.r, b.x));
+        b.y = Math.max(field.top + b.r, Math.min(field.bottom - b.r, b.y));
+      }
+
+      function releaseContestedBall() {
+        const p1Touching = Math.hypot(ball.x - p1.x, ball.y - p1.y) <= p1.r + ball.r + 0.5;
+        const p2Touching = Math.hypot(ball.x - p2.x, ball.y - p2.y) <= p2.r + ball.r + 0.5;
+        if (!p1Touching || !p2Touching || Math.hypot(ball.vx, ball.vy) >= 45) return;
+
+        const lineX = p2.x - p1.x;
+        const lineY = p2.y - p1.y;
+        const length = Math.hypot(lineX, lineY) || 1;
+        ball.vx = -lineY / length * 150;
+        ball.vy = lineX / length * 150;
+      }
+
+      function update(dt) {
+        if (goalPause > 0) {
+          goalPause -= dt;
+          return;
+        }
+
+        const fastestPlayer = Math.max(p1.speed, p2.speed);
+        let remaining = dt;
+        while (remaining > 0) {
+          const relativeSpeed = Math.max(
+            Math.hypot(ball.vx, ball.vy) + fastestPlayer,
+            fastestPlayer * 2
+          );
+          const stepDt = Math.min(remaining, 8 / relativeSpeed);
+          movePlayer(p1, "a", "d", "w", "s", stepDt);
+          movePlayer(p2, "arrowleft", "arrowright", "arrowup", "arrowdown", stepDt);
+          collidePlayers(p1, p2);
+
+          collideCircle(p1, ball, 0.9);
+          collideCircle(p2, ball, 0.9);
+          releaseContestedBall();
+          ball.x += ball.vx * stepDt;
+          ball.y += ball.vy * stepDt;
+          collideCircle(p1, ball, 0.9);
+          collideCircle(p2, ball, 0.9);
+          releaseContestedBall();
+          ball.vx *= Math.pow(0.986, stepDt * 60);
+          ball.vy *= Math.pow(0.986, stepDt * 60);
+
+          if (ball.y - ball.r < field.top) {
+            ball.y = field.top + ball.r;
+            ball.vy = Math.abs(ball.vy) * 0.82;
+          }
+          if (ball.y + ball.r > field.bottom) {
+            ball.y = field.bottom - ball.r;
+            ball.vy = -Math.abs(ball.vy) * 0.82;
+          }
+
+          const ballFitsGoal = ball.y - ball.r >= goal.top && ball.y + ball.r <= goal.bottom;
+          if (ballFitsGoal) {
+            if (ball.x < field.left - 18 && ball.vx < 0) {
+              scoreGoal(2);
+              return;
+            }
+            if (ball.x > field.right + 18 && ball.vx > 0) {
+              scoreGoal(1);
+              return;
+            }
+          }
+
+          if (ball.x - ball.r < field.left && !ballFitsGoal) {
+            ball.x = field.left + ball.r;
+            ball.vx = Math.abs(ball.vx) * 0.82;
+          }
+          if (ball.x + ball.r > field.right && !ballFitsGoal) {
+            ball.x = field.right - ball.r;
+            ball.vx = -Math.abs(ball.vx) * 0.82;
+          }
+
+          remaining = stepDt >= remaining ? 0 : remaining - stepDt;
+        }
+
+        timeLeft -= dt;
+        if (timeLeft <= 0) {
+          timeLeft = 0;
+          endMatch();
+        }
+      }
+
+      function scoreGoal(player) {
+        if (player === 1) score1++;
+        else score2++;
+        score1El.textContent = score1;
+        score2El.textContent = score2;
+        statusEl.textContent = player === 1 ? "P1 SCORES!" : "P2 SCORES!";
+        goalPause = 1.2;
+        if (score1 >= 7 || score2 >= 7) {
+          setTimeout(() => endMatch(player === 1 ? 1 : 2), 650);
+        } else {
+          setTimeout(() => {
+            resetPositions(player === 1 ? -1 : 1);
+            statusEl.textContent = "FIRST TO 7";
+          }, 650);
+        }
+      }
+
+      function endMatch(forcedWinner) {
+        running = false;
+        matchOver = true;
+        let winner = forcedWinner;
+        if (!winner) winner = score1 === score2 ? 0 : (score1 > score2 ? 1 : 2);
+        titleEl.innerHTML = winner === 0 ? "TIE GAME!" : `PLAYER ${winner}<br />WINS!`;
+        messageEl.textContent = `Final score: ${score1} - ${score2}`;
+        startButton.textContent = "Play Again";
+        overlay.classList.remove("hidden");
+      }
+
+      function loop(now) {
+        if (!running) return;
+        const dt = Math.min((now - lastTick) / 1000, 0.033);
+        lastTick = now;
+        update(dt);
+
+        const seconds = Math.ceil(timeLeft);
+        const minutes = Math.floor(seconds / 60);
+        timerEl.textContent = `${minutes}:${String(seconds % 60).padStart(2, "0")}`;
+        draw();
+        requestAnimationFrame(loop);
+      }
+
+      function drawField() {
+        ctx.fillStyle = "#389a43";
+        ctx.fillRect(0, 0, W, H);
+
+        ctx.fillStyle = "#43a84d";
+        for (let x = 0; x < W; x += 75) {
+          ctx.fillRect(x, 0, 37, H);
+        }
+
+        ctx.strokeStyle = "rgba(255,255,255,0.88)";
+        ctx.lineWidth = 4;
+        ctx.strokeRect(field.left, field.top, field.right - field.left, field.bottom - field.top);
+
+        ctx.beginPath();
+        ctx.moveTo(W / 2, field.top);
+        ctx.lineTo(W / 2, field.bottom);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(W / 2, H / 2, 75, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = "rgba(255,255,255,0.9)";
+        ctx.beginPath();
+        ctx.arc(W / 2, H / 2, 5, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeRect(field.left, 138, 150, 284);
+        ctx.strokeRect(field.right - 150, 138, 150, 284);
+        ctx.strokeRect(field.left, 200, 68, 160);
+        ctx.strokeRect(field.right - 68, 200, 68, 160);
+
+        ctx.fillStyle = "rgba(230, 241, 255, 0.18)";
+        ctx.fillRect(field.left - 28, goal.top, 28, goal.bottom - goal.top);
+        ctx.fillRect(field.right, goal.top, 28, goal.bottom - goal.top);
+        ctx.strokeStyle = "rgba(255,255,255,0.8)";
+        ctx.strokeRect(field.left - 28, goal.top, 28, goal.bottom - goal.top);
+        ctx.strokeRect(field.right, goal.top, 28, goal.bottom - goal.top);
+      }
+
+      function drawSponge(player, color, jerseyNumber) {
+        ctx.save();
+        ctx.translate(player.x, player.y);
+        ctx.rotate(player.angle);
+
+        // NHL-style composite stick: slim taped shaft and a broad, curved blade.
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+
+        ctx.strokeStyle = "#1b2328";
+        ctx.lineWidth = 9;
+        ctx.beginPath();
+        ctx.moveTo(17, 7);
+        ctx.lineTo(47, 7);
+        ctx.quadraticCurveTo(57, 7, 61, 15);
+        ctx.stroke();
+
+        ctx.strokeStyle = "#bfc5c7";
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(17, 7);
+        ctx.lineTo(45, 7);
+        ctx.stroke();
+
+        ctx.strokeStyle = "#0e1113";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        for (let y = 4; y <= 10; y += 3) {
+          ctx.moveTo(15, y);
+          ctx.lineTo(24, y);
+        }
+        ctx.stroke();
+
+        ctx.fillStyle = "#20272b";
+        ctx.beginPath();
+        ctx.moveTo(59, 12);
+        ctx.quadraticCurveTo(64, 21, 59, 27);
+        ctx.quadraticCurveTo(70, 27, 82, 22);
+        ctx.quadraticCurveTo(91, 19, 88, 13);
+        ctx.quadraticCurveTo(82, 9, 69, 11);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.strokeStyle = "#7c8588";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(61, 14);
+        ctx.quadraticCurveTo(73, 23, 86, 15);
+        ctx.stroke();
+
+        ctx.rotate(-player.angle);
+        ctx.fillStyle = "#f2dd68";
+        ctx.strokeStyle = "#8e7a32";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.roundRect(-24, -38, 48, 76, 7);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = "#68bde0";
+        ctx.beginPath();
+        ctx.arc(-7, -27, 7, 0, Math.PI * 2);
+        ctx.arc(12, 13, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#d98a78";
+        ctx.beginPath();
+        ctx.arc(15, -18, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = "white";
+        ctx.beginPath();
+        ctx.arc(-8, -30, 7, 0, Math.PI * 2);
+        ctx.arc(8, -30, 7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#58b7de";
+        ctx.beginPath();
+        ctx.arc(-8, -30, 3, 0, Math.PI * 2);
+        ctx.arc(8, -30, 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = "#3d3524";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(-11, -13);
+        ctx.quadraticCurveTo(0, -5, 11, -13);
+        ctx.stroke();
+        ctx.strokeStyle = "#9a3c45";
+        ctx.beginPath();
+        ctx.moveTo(-7, 0);
+        ctx.quadraticCurveTo(0, 7, 7, 0);
+        ctx.stroke();
+
+        ctx.fillStyle = color;
+        ctx.fillRect(-21, 7, 42, 31);
+        ctx.strokeStyle = "#24303a";
+        ctx.strokeRect(-21, 7, 42, 31);
+        ctx.fillStyle = "white";
+        ctx.font = "900 18px Trebuchet MS";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(String(jerseyNumber), 0, 23);
+
+        ctx.fillStyle = "#f0d35d";
+        ctx.fillRect(-14, 36, 8, 8);
+        ctx.fillRect(6, 36, 8, 8);
+
+        ctx.restore();
+      }
+
+      function drawBasketball() {
+        ctx.save();
+        ctx.translate(ball.x, ball.y);
+        ctx.fillStyle = "#d96a25";
+        ctx.beginPath();
+        ctx.arc(0, 0, ball.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "#442515";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(-ball.r, 0);
+        ctx.lineTo(ball.r, 0);
+        ctx.moveTo(0, -ball.r);
+        ctx.lineTo(0, ball.r);
+        ctx.arc(0, 0, ball.r * 0.72, -0.8, 0.8);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      function draw() {
+        drawField();
+        drawSponge(p1, "#ffd166", 1);
+        drawSponge(p2, "#67d9ff", 2);
+        drawBasketball();
+      }
+
+      draw();
+    </script>
+  </body>
+</html>
