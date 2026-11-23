@@ -95,6 +95,21 @@
       cursor: pointer;
     }
 
+    button.game-card.image-card {
+      min-height: 0;
+      padding: 0;
+      overflow: hidden;
+      border: 0;
+      background: transparent;
+      box-shadow: none;
+    }
+
+    .game-card-image {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+
     .tag-game-modal {
       position: fixed;
       inset: 0;
@@ -207,10 +222,8 @@
         <span class="game-action">Play Starfield Tag &rarr;</span>
       </button>
 
-      <button class="game-card" id="openSpongeHockey" type="button">
-        <h2>Sponge Hockey</h2>
-        <p>Two-player basketball hockey on a soccer field. WASD vs arrow keys.</p>
-        <span class="game-action">Play Sponge Hockey &rarr;</span>
+      <button class="game-card image-card" id="openSpongeHockey" type="button">
+        <img class="game-card-image" src="sponge-hockey-card.png" alt="Sponge Hockey — two-player basketball hockey. Play Sponge Hockey.">
       </button>
 
     </div>
