@@ -225,13 +225,13 @@
       const startButton = document.getElementById("startButton");
       const backToArcade = document.getElementById("backToArcade");
 
-      backToArcade.addEventListener("click", () => {
-        if (window.parent !== window) {
-          window.parent.postMessage("closeSpongeHockey", "*");
-        } else {
+      if (window.parent !== window) {
+        backToArcade.hidden = true;
+      } else {
+        backToArcade.addEventListener("click", () => {
           window.location.href = "index.html";
-        }
-      });
+        });
+      }
 
       const W = canvas.width;
       const H = canvas.height;
