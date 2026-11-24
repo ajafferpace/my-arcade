@@ -227,6 +227,70 @@
       let lastTagAt = {};
       highScoreEl.textContent = String(highScore);
 
+      function createGameMusic() {
+        let audioContext = null;
+        let master = null;
+        let timer = null;
+        let step = 0;
+
+        function scheduleNote(frequency, duration, type = "triangle", volume = 0.035) {
+          if (!audioContext || audioContext.state !== "running") return;
+          const now = audioContext.currentTime;
+          const oscillator = audioContext.createOscillator();
+          const gain = audioContext.createGain();
+          oscillator.type = type;
+          oscillator.frequency.setValueAtTime(frequency, now);
+          gain.gain.setValueAtTime(0.0001, now);
+          gain.gain.exponentialRampToValueAtTime(volume, now + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+          oscillator.connect(gain);
+          gain.connect(master);
+          oscillator.start(now);
+          oscillator.stop(now + duration + 0.05);
+        }
+
+        return {
+          start() {
+            if (!audioContext) {
+              audioContext = new (window.AudioContext || window.webkitAudioContext)();
+              master = audioContext.createGain();
+              master.gain.value = 0.8;
+              master.connect(audioContext.destination);
+            }
+            audioContext.resume();
+            if (timer) return;
+
+            const bass = [110, 110, 146.83, 110, 98, 98, 130.81, 98];
+            const lead = [220, 277.18, 329.63, 277.18, 196, 246.94, 293.66, 246.94];
+            const playStep = () => {
+              scheduleNote(bass[step % bass.length], 0.22, "triangle", 0.028);
+              if (step % 2 === 0) {
+                scheduleNote(lead[step % lead.length], 0.16, "square", 0.012);
+              }
+              step += 1;
+            };
+            playStep();
+            timer = window.setInterval(playStep, 220);
+          },
+          stop() {
+            if (timer) {
+              window.clearInterval(timer);
+              timer = null;
+            }
+            if (master && audioContext) {
+              master.gain.cancelScheduledValues(audioContext.currentTime);
+              master.gain.setValueAtTime(master.gain.value, audioContext.currentTime);
+              master.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.08);
+              window.setTimeout(() => {
+                if (master) master.gain.value = 0.8;
+              }, 100);
+            }
+          }
+        };
+      }
+
+      const gameMusic = createGameMusic();
+
       const stars = Array.from({ length: 150 }, () => ({
         x: Math.random() * W,
         y: Math.random() * H,
@@ -298,10 +362,12 @@
         running = true;
         startTime = performance.now();
         overlay.classList.add("hidden");
+        gameMusic.start();
       }
 
       function endGame() {
         running = false;
+        gameMusic.stop();
         const lost = humanScore < 0;
         const bestBot = bots.reduce((best, bot) => bot.score > best.score ? bot : best, bots[0]);
         titleEl.textContent = humanScore >= 10 ? "TAG CHAMPION!" : lost ? "TAGGED OUT!" : "TIME!";

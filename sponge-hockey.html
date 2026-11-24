@@ -244,6 +244,71 @@
       let timeLeft = 90;
       let lastTick = 0;
       let goalPause = 0;
+      let cornerBlastCooldown = 0;
+
+      function createGameMusic() {
+        let audioContext = null;
+        let master = null;
+        let timer = null;
+        let step = 0;
+
+        function scheduleNote(frequency, duration, type = "triangle", volume = 0.035) {
+          if (!audioContext || audioContext.state !== "running") return;
+          const now = audioContext.currentTime;
+          const oscillator = audioContext.createOscillator();
+          const gain = audioContext.createGain();
+          oscillator.type = type;
+          oscillator.frequency.setValueAtTime(frequency, now);
+          gain.gain.setValueAtTime(0.0001, now);
+          gain.gain.exponentialRampToValueAtTime(volume, now + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+          oscillator.connect(gain);
+          gain.connect(master);
+          oscillator.start(now);
+          oscillator.stop(now + duration + 0.05);
+        }
+
+        return {
+          start() {
+            if (!audioContext) {
+              audioContext = new (window.AudioContext || window.webkitAudioContext)();
+              master = audioContext.createGain();
+              master.gain.value = 0.8;
+              master.connect(audioContext.destination);
+            }
+            audioContext.resume();
+            if (timer) return;
+
+            const bass = [130.81, 130.81, 164.81, 196, 146.83, 146.83, 174.61, 196];
+            const lead = [261.63, 329.63, 392, 329.63, 293.66, 349.23, 440, 392];
+            const playStep = () => {
+              scheduleNote(bass[step % bass.length], 0.24, "triangle", 0.032);
+              if (step % 2 === 0) {
+                scheduleNote(lead[step % lead.length], 0.18, "square", 0.012);
+              }
+              step += 1;
+            };
+            playStep();
+            timer = window.setInterval(playStep, 240);
+          },
+          stop() {
+            if (timer) {
+              window.clearInterval(timer);
+              timer = null;
+            }
+            if (master && audioContext) {
+              master.gain.cancelScheduledValues(audioContext.currentTime);
+              master.gain.setValueAtTime(master.gain.value, audioContext.currentTime);
+              master.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.08);
+              window.setTimeout(() => {
+                if (master) master.gain.value = 0.8;
+              }, 100);
+            }
+          }
+        };
+      }
+
+      const gameMusic = createGameMusic();
 
       const p1 = { x: 245, y: 280, r: 29, speed: 270, angle: 0, vx: 0, vy: 0 };
       const p2 = { x: 655, y: 280, r: 29, speed: 270, angle: Math.PI, vx: 0, vy: 0 };
@@ -258,6 +323,7 @@
         ball.x = 450; ball.y = 280;
         ball.vx = direction * 40;
         ball.vy = 0;
+        cornerBlastCooldown = 0;
       }
 
       function startMatch() {
@@ -272,6 +338,7 @@
         statusEl.textContent = "FIRST TO 7";
         overlay.classList.add("hidden");
         running = true;
+        gameMusic.start();
         lastTick = performance.now();
         requestAnimationFrame(loop);
       }
@@ -374,10 +441,35 @@
         ball.vy = lineX / length * 150;
       }
 
+      function blastBallFromCorner() {
+        if (cornerBlastCooldown > 0) return;
+
+        const cornerSize = 110;
+        const nearLeft = ball.x - ball.r <= field.left + cornerSize;
+        const nearRight = ball.x + ball.r >= field.right - cornerSize;
+        const nearTop = ball.y - ball.r <= field.top + cornerSize;
+        const nearBottom = ball.y + ball.r >= field.bottom - cornerSize;
+        if (!((nearLeft || nearRight) && (nearTop || nearBottom))) return;
+
+        const centerX = (field.left + field.right) / 2;
+        const centerY = (field.top + field.bottom) / 2;
+        const dx = centerX - ball.x;
+        const dy = centerY - ball.y;
+        const distance = Math.hypot(dx, dy) || 1;
+        const blastSpeed = 520;
+        ball.vx = dx / distance * blastSpeed;
+        ball.vy = dy / distance * blastSpeed;
+        cornerBlastCooldown = 0.35;
+      }
+
       function update(dt) {
         if (goalPause > 0) {
           goalPause -= dt;
           return;
+        }
+
+        if (cornerBlastCooldown > 0) {
+          cornerBlastCooldown -= dt;
         }
 
         const fastestPlayer = Math.max(p1.speed, p2.speed);
@@ -433,6 +525,8 @@
             ball.vx = -Math.abs(ball.vx) * 0.82;
           }
 
+          blastBallFromCorner();
+
           remaining = stepDt >= remaining ? 0 : remaining - stepDt;
         }
 
@@ -462,6 +556,7 @@
 
       function endMatch(forcedWinner) {
         running = false;
+        gameMusic.stop();
         matchOver = true;
         let winner = forcedWinner;
         if (!winner) winner = score1 === score2 ? 0 : (score1 > score2 ? 1 : 2);
